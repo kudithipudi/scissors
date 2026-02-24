@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Device Detection Test{% endblock %}
+
+{% block extra_head %}
+<script src="{{ url_for('static', filename='js/shake.js') }}?v=2.1"></script>
+<script>
+    // Immediate check when script loads
+    console.log('=== Device Detection Debug ===');
+    console.log('User Agent:', navigator.userAgent);
+    console.log('Platform:', navigator.platform);
+    console.log('Max Touch Points:', navigator.maxTouchPoints);
+    console.log('DeviceMotionEvent exists:', 'DeviceMotionEvent' in window);
+    console.log('DeviceOrientationEvent exists:', 'DeviceOrientationEvent' in window);
+    console.log('Is Secure Context:', window.isSecureContext);
+    console.log('Protocol:', location.protocol);
+    console.log('DeviceCapabilities loaded:', typeof window.DeviceCapabilities !== 'undefined');
+
+    // Simple mobile check
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isMobileTouchPoints = navigator.maxTouchPoints && navigator.maxTouchPoints > 1;
+    console.log('Is Mobile (UA):', isMobileUA);
+    console.log('Is Mobile (Touch):', isMobileTouchPoints);
+    console.log('Is Mobile (Combined):', isMobileUA || isMobileTouchPoints);
+    console.log('==============================');
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 800px; margin: 0 auto;">
+    <div class="card-header">
+        <h2>Device & Sensor Detection Test</h2>
+    </div>
+
+    <div class="card-body" x-data="deviceTest()" x-init="runTests()">
+        <div class="mb-2">
+            <h3>Device Information</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid var(--color-bg-lighter);">
+                    <td style="padding: var(--spacing-sm); font-weight: 600;">User Agent</td>
+                    <td style="padding: var(--spacing-sm); word-break: break-all; font-family: monospace; font-size: 0.75rem;" x-text="userAgent"></td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--color-bg-lighter);">
+                    <td style="padding: var(--spacing-sm); font-weight: 600;">Platform</td>
+                    <td style="padding: var(--spacing-sm);" x-text="platform"></td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--color-bg-lighter);">
+                    <td style="padding: var(--spacing-sm); font-weight: 600;">Touch Points</td>
+                    <td style="padding: var(--spacing-sm);" x-text="maxTouchPoints"></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="mb-2">
+            <h3>Detection Results</h3>
+            <div class="grid grid-2">
+                <div class="stat-card" :style="isMobile ? 'border: 2px solid var(--color-success);' : 'border: 2px solid var(--color-danger);'">
+                    <div class="stat-value" x-text="isMobile ? '✅' : '❌'"></div>
+                    <div class="stat-label">Is Mobile</div>
+                </div>
+                <div class="stat-card" :style="hasMotionSensors ? 'border: 2px solid var(--color-success);' : 'border: 2px solid var(--color-danger);'">
+                    <div class="stat-value" x-text="hasMotionSensors ? '✅' : '❌'"></div>
+                    <div class="stat-label">Motion Sensors</div>
+                </div>
+                <div class="stat-card" :style="hasOrientationSensors ? 'border: 2px solid var(--color-success);' : 'border: 2px solid var(--color-danger);'">
+                    <div class="stat-value" x-text="hasOrientationSensors ? '✅' : '❌'"></div>
+                    <div class="stat-label">Orientation Sensors</div>
+                </div>
+                <div class="stat-card" :style="isSecureContext ? 'border: 2px solid var(--color-success);' : 'border: 2px solid var(--color-danger);'">
+                    <div class="stat-value" x-text="isSecureContext ? '✅' : '❌'"></div>
+                    <div class="stat-label">HTTPS</div>
+                </div>
+            </table>
+        </div>
+
+        <div class="mb-2" x-show="!ready">
+            <div style="background: var(--color-danger); color: white; padding: var(--spacing-md); border-radius: var(--radius-md);">
+                <h3 style="margin: 0 0 var(--spacing-sm) 0;">⚠️ Device Not Ready for Shake Detection</h3>
+                <ul style="margin: var(--spacing-sm) 0; padding-left: var(--spacing-lg);">
+                    <template x-for="error in errors" :key="error">
+                        <li x-text="error"></li>
+                    </template>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mb-2" x-show="ready">
+            <div style="background: var(--color-success); color: white; padding: var(--spacing-md); border-radius: var(--radius-md);">
+                <h3 style="margin: 0;">✅ Device Ready for Shake Detection</h3>
+                <p style="margin: var(--spacing-sm) 0 0 0;">Your device supports all required features!</p>
+            </div>
+        </div>
+
+        <div class="mb-2" x-show="isMobile && hasMotionSensors">
+            <h3>Test Shake Detection</h3>
+            <button @click="testShake()" class="btn btn-primary btn-lg btn-block" :disabled="testing">
+                <span x-show="!testing">🧪 Test Shake Detection</span>
+                <span x-show="testing">Shake your phone! (<span x-text="shakeCount"></span>/3)</span>
+            </button>
+            <div x-show="shakeResult" class="mt-1" style="padding: var(--spacing-md); background: var(--color-bg); border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);" x-text="shakeResult"></div>
+                <p class="text-muted">Shake detection <span x-show="shakeSuccess">worked!</span><span x-show="!shakeSuccess">failed</span></p>
+            </div>
+        </div>
+
+        <div class="card-footer">
+            <button @click="runTests()" class="btn btn-outline">🔄 Re-run Tests</button>
+            <a href="{{ url_for('game.index') }}" class="btn btn-primary">🏠 Back to Game</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    function deviceTest() {
+        return {
+            // Device info
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            maxTouchPoints: navigator.maxTouchPoints || 0,
+
+            // Detection results
+            isMobile: false,
+            hasMotionSensors: false,
+            hasOrientationSensors: false,
+            isSecureContext: false,
+            permissionGranted: false,
+            ready: false,
+            errors: [],
+
+            // Shake test
+            testing: false,
+            shakeCount: 0,
+            shakeResult: '',
+            shakeSuccess: false,
+
+            async runTests() {
+                try {
+                    // Check if DeviceCapabilities is available
+                    if (typeof window.DeviceCapabilities === 'undefined') {
+                        this.errors = ['ERROR: DeviceCapabilities not loaded. shake.js may have failed to load.'];
+                        console.error('DeviceCapabilities not found on window object');
+                        console.log('Available on window:', Object.keys(window).filter(k => k.includes('Device')));
+                        return;
+                    }
+
+                    console.log('Running capability tests...');
+
+                    // Run capability check
+                    const result = await window.DeviceCapabilities.checkCapabilities();
+
+                    this.isMobile = result.isMobile;
+                    this.hasMotionSensors = result.hasMotionSensors;
+                    this.hasOrientationSensors = result.hasOrientationSensors;
+                    this.isSecureContext = result.isSecureContext;
+                    this.permissionGranted = result.permissionGranted;
+                    this.ready = result.ready;
+                    this.errors = result.errors || [];
+
+                    console.log('Device capabilities:', result);
+                } catch (error) {
+                    console.error('Error running tests:', error);
+                    this.errors = ['JavaScript Error: ' + error.message];
+                }
+            },
+
+            async testShake() {
+                this.testing = true;
+                this.shakeCount = 0;
+                this.shakeResult = '';
+                this.shakeSuccess = false;
+
+                const detector = new ShakeDetector(
+                    (count) => {
+                        this.shakeCount = count;
+                        if (count === 3) {
+                            this.testing = false;
+                            this.shakeResult = '✅ Success!';
+                            this.shakeSuccess = true;
+                            detector.stop();
+                        }
+                    },
+                    (errors) => {
+                        this.testing = false;
+                        this.shakeResult = '❌ Failed';
+                        this.shakeSuccess = false;
+                        this.errors = errors;
+                    }
+                );
+
+                const started = await detector.start();
+                if (!started) {
+                    this.testing = false;
+                    this.shakeResult = '❌ Could not start';
+                    this.shakeSuccess = false;
+                }
+
+                // Timeout after 15 seconds
+                setTimeout(() => {
+                    if (this.testing) {
+                        detector.stop();
+                        this.testing = false;
+                        this.shakeResult = '⏱️ Timeout';
+                        this.shakeSuccess = false;
+                    }
+                }, 15000);
+            }
+        }
+    }
+</script>
+{% endblock %}

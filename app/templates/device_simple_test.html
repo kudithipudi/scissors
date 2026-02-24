@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Device Test</title>
+    <style>
+        body {
+            font-family: -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #f1f5f9;
+        }
+        .test-result {
+            background: #1e293b;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #6366f1;
+        }
+        .pass { border-left-color: #10b981; }
+        .fail { border-left-color: #ef4444; }
+        .result-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .result-value {
+            font-family: monospace;
+            font-size: 1.2em;
+        }
+        .info {
+            background: #334155;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Simple Device Detection Test</h1>
+    <p>This page uses pure JavaScript (no frameworks) to test device detection.</p>
+
+    <div id="results"></div>
+
+    <script src="{{ url_for('static', filename='js/shake.js') }}?v=2.1"></script>
+    <script>
+        // Wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', async function() {
+            const resultsDiv = document.getElementById('results');
+
+            function addResult(label, value, isPass) {
+                const div = document.createElement('div');
+                div.className = 'test-result ' + (isPass ? 'pass' : 'fail');
+                div.innerHTML = `
+                    <div class="result-label">${label}</div>
+                    <div class="result-value">${value} ${isPass ? '✅' : '❌'}</div>
+                `;
+                resultsDiv.appendChild(div);
+            }
+
+            function addInfo(label, value) {
+                const div = document.createElement('div');
+                div.className = 'info';
+                div.innerHTML = `<strong>${label}:</strong> ${value}`;
+                resultsDiv.appendChild(div);
+            }
+
+            // Basic device info
+            addInfo('User Agent', navigator.userAgent);
+            addInfo('Platform', navigator.platform);
+            addInfo('Max Touch Points', navigator.maxTouchPoints || 0);
+            addInfo('Protocol', location.protocol);
+
+            // Direct checks (no DeviceCapabilities)
+            const userAgent = navigator.userAgent;
+            const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isMobileTouchPoints = navigator.maxTouchPoints && navigator.maxTouchPoints > 1;
+            const isMobile = isMobileUA || isMobileTouchPoints;
+
+            addResult('Is Mobile (User Agent check)', isMobileUA ? 'YES' : 'NO', isMobileUA);
+            addResult('Is Mobile (Touch Points > 1)', isMobileTouchPoints ? 'YES' : 'NO', isMobileTouchPoints);
+            addResult('Is Mobile (Combined)', isMobile ? 'YES' : 'NO', isMobile);
+
+            const hasDeviceMotion = 'DeviceMotionEvent' in window;
+            const hasDeviceOrientation = 'DeviceOrientationEvent' in window;
+            const isSecure = window.isSecureContext || location.protocol === 'https:';
+
+            addResult('DeviceMotionEvent exists', hasDeviceMotion ? 'YES' : 'NO', hasDeviceMotion);
+            addResult('DeviceOrientationEvent exists', hasDeviceOrientation ? 'YES' : 'NO', hasDeviceOrientation);
+            addResult('Is Secure Context (HTTPS)', isSecure ? 'YES' : 'NO', isSecure);
+
+            // Check if DeviceCapabilities loaded
+            const capsLoaded = typeof window.DeviceCapabilities !== 'undefined';
+            addResult('DeviceCapabilities loaded', capsLoaded ? 'YES' : 'NO', capsLoaded);
+
+            // If loaded, test it
+            if (capsLoaded) {
+                try {
+                    const result = await window.DeviceCapabilities.checkCapabilities();
+
+                    addResult('DeviceCapabilities.isMobile()', result.isMobile ? 'YES' : 'NO', result.isMobile);
+                    addResult('DeviceCapabilities.hasMotionSensors()', result.hasMotionSensors ? 'YES' : 'NO', result.hasMotionSensors);
+                    addResult('DeviceCapabilities.isSecureContext()', result.isSecureContext ? 'YES' : 'NO', result.isSecureContext);
+                    addResult('Needs Permission (iOS)', result.needsPermission ? 'YES' : 'NO', !result.needsPermission);
+
+                    // Add permission button if needed
+                    if (result.needsPermission) {
+                        const permDiv = document.createElement('div');
+                        permDiv.className = 'test-result';
+                        permDiv.innerHTML = `
+                            <div class="result-label">📱 iOS Permission Required</div>
+                            <button id="requestPermBtn" style="background: #6366f1; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1.1em; cursor: pointer; margin-top: 10px;">
+                                Request Motion Sensor Permission
+                            </button>
+                            <div id="permResult" style="margin-top: 10px;"></div>
+                        `;
+                        resultsDiv.appendChild(permDiv);
+
+                        document.getElementById('requestPermBtn').addEventListener('click', async function() {
+                            const btn = this;
+                            btn.disabled = true;
+                            btn.textContent = 'Requesting...';
+
+                            const granted = await window.DeviceCapabilities.requestPermission();
+                            const resultDiv = document.getElementById('permResult');
+
+                            if (granted) {
+                                resultDiv.innerHTML = '<strong style="color: #10b981;">✅ Permission Granted!</strong>';
+                                addResult('Permission Status', 'GRANTED', true);
+                            } else {
+                                resultDiv.innerHTML = '<strong style="color: #ef4444;">❌ Permission Denied</strong>';
+                                addResult('Permission Status', 'DENIED', false);
+                            }
+                        });
+                    }
+
+                    addResult('Overall Ready', result.ready ? 'YES' : 'NO', result.ready);
+
+                    if (result.errors && result.errors.length > 0) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'test-result fail';
+                        errorDiv.innerHTML = `
+                            <div class="result-label">ℹ️ Notes</div>
+                            <ul>${result.errors.map(e => '<li>' + e + '</li>').join('')}</ul>
+                        `;
+                        resultsDiv.appendChild(errorDiv);
+                    }
+                } catch (error) {
+                    addResult('DeviceCapabilities Error', error.message, false);
+                }
+            } else {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'test-result fail';
+                errorDiv.innerHTML = `
+                    <div class="result-label">⚠️ DeviceCapabilities Not Loaded</div>
+                    <div>shake.js did not load properly or DeviceCapabilities is not defined</div>
+                `;
+                resultsDiv.appendChild(errorDiv);
+            }
+
+            // Add back button
+            const backDiv = document.createElement('div');
+            backDiv.style.marginTop = '20px';
+            backDiv.innerHTML = '<a href="{{ url_for("game.index") }}" style="color: #6366f1; text-decoration: none; font-size: 1.1em;">← Back to Home</a>';
+            resultsDiv.appendChild(backDiv);
+        });
+    </script>
+</body>
+</html>

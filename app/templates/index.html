@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Rock Paper Scissors - Play with Friends{% endblock %}
+
+{% block content %}
+<div class="text-center" x-data="landingPage()">
+    <!-- Hero Section -->
+    <div class="hero mb-3">
+        <h1 class="mb-2" style="font-size: 3.5rem;">
+            <span class="logo-icon" style="font-size: 5rem;">✊✋✌️</span>
+            <br>
+            <span style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                Rock Paper Scissors
+            </span>
+        </h1>
+        <p class="text-muted" style="font-size: 1.35rem; margin-bottom: var(--spacing-2xl); max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.5;">
+            🎮 Real-time multiplayer • 📳 Shake to play • 🌐 Play anywhere
+        </p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid mb-3">
+        <div class="stat-card">
+            <div class="stat-value" x-text="activeGames"></div>
+            <div class="stat-label">Active Games</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="totalGames"></div>
+            <div class="stat-label">Total Games</div>
+        </div>
+    </div>
+
+    <!-- Main Actions -->
+    <div class="grid grid-2" style="max-width: 800px; margin: 0 auto;">
+        <!-- Host Game Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 style="margin-bottom: 0;">Host a Game</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Create a new game and invite a friend</p>
+                <form @submit.prevent="hostGame">
+                    <div class="form-group">
+                        <label class="form-label">Game Mode</label>
+                        <select class="form-select" x-model="bestOf" required>
+                            <option value="1">Best of 1</option>
+                            <option value="3" selected>Best of 3</option>
+                            <option value="5">Best of 5</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg btn-block" :disabled="loading">
+                        <span x-show="!loading">🎮 Host Game</span>
+                        <span x-show="loading">Creating...</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Join Game Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 style="margin-bottom: 0;">Join a Game</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Enter the game code or scan QR code</p>
+                <form @submit.prevent="joinGame">
+                    <div class="form-group">
+                        <label class="form-label">Game Code</label>
+                        <input
+                            type="text"
+                            class="form-input"
+                            x-model="gameCode"
+                            placeholder="Enter code"
+                            maxlength="8"
+                            required
+                            style="text-transform: uppercase; text-align: center; font-size: 1.5rem; font-family: monospace;"
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-secondary btn-lg btn-block" :disabled="loading">
+                        <span x-show="!loading">🎯 Join Game</span>
+                        <span x-show="loading">Joining...</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- How to Play -->
+    <div class="card mt-3" style="max-width: 900px; margin: var(--spacing-2xl) auto 0;">
+        <div class="card-header">
+            <h3 style="margin-bottom: 0; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">How to Play</h3>
+        </div>
+        <div class="card-body text-center">
+            <div class="grid grid-3">
+                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: all var(--transition-base);">
+                    <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(124, 58, 237, 0.3));">📱</div>
+                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">1. Create or Join</h4>
+                    <p class="text-muted" style="font-size: 0.95rem;">Host a game and share the code, or join with a code</p>
+                </div>
+                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: all var(--transition-base);">
+                    <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(236, 72, 153, 0.3));">🤝</div>
+                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">2. Wait for Opponent</h4>
+                    <p class="text-muted" style="font-size: 0.95rem;">Both players must be ready to start</p>
+                </div>
+                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: all var(--transition-base);">
+                    <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(16, 185, 129, 0.3));">📳</div>
+                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">3. Shake to Play</h4>
+                    <p class="text-muted" style="font-size: 0.95rem;">Shake your phone 3 times to make your choice</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Get base path from current location
+    const getBasePath = () => {
+        const path = window.location.pathname;
+        const base = path.substring(0, path.lastIndexOf('/') + 1);
+        return base.endsWith('/') ? base.slice(0, -1) : base;
+    };
+
+    function landingPage() {
+        return {
+            bestOf: 3,
+            gameCode: '',
+            loading: false,
+            activeGames: 0,
+            totalGames: 0,
+
+            async init() {
+                await this.loadStats();
+                // Refresh stats every 10 seconds
+                setInterval(() => this.loadStats(), 10000);
+            },
+
+            async loadStats() {
+                try {
+                    const response = await fetch('{{ url_for("api.get_stats") }}');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.activeGames = data.active_games || 0;
+                        this.totalGames = data.total_games || 0;
+                    }
+                } catch (error) {
+                    console.error('Failed to load stats:', error);
+                }
+            },
+
+            async hostGame() {
+                this.loading = true;
+                try {
+                    const response = await fetch('{{ url_for("game.create_game") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            best_of: parseInt(this.bestOf)
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        window.location.href = '{{ url_for("game.view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', data.game_code);
+                    } else {
+                        handleError(data.error || 'Failed to create game');
+                    }
+                } catch (error) {
+                    handleError('Network error. Please try again.');
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async joinGame() {
+                if (!this.gameCode) {
+                    handleError('Please enter a game code');
+                    return;
+                }
+
+                this.loading = true;
+                const code = this.gameCode.toUpperCase().trim();
+
+                try {
+                    // Navigate to game page
+                    window.location.href = '{{ url_for("game.view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', code);
+                } catch (error) {
+                    handleError('Invalid game code');
+                } finally {
+                    this.loading = false;
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}

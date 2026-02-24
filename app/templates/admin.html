@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('game.index') }}" class="btn btn-outline">🏠 Home</a>
+{% endblock %}
+
+{% block content %}
+<div x-data="adminDashboard()" x-init="init()">
+    <h1 class="mb-2">Admin Dashboard</h1>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid mb-3">
+        <div class="stat-card">
+            <div class="stat-value" x-text="stats.total_games"></div>
+            <div class="stat-label">Total Games</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="stats.active_games"></div>
+            <div class="stat-label">Active Games</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="stats.completed_games"></div>
+            <div class="stat-label">Completed Games</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="stats.cancelled_games"></div>
+            <div class="stat-label">Cancelled Games</div>
+        </div>
+    </div>
+
+    <!-- Game Mode Statistics -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h2 style="margin-bottom: 0;">Popular Game Modes</h2>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-3">
+                <div class="stat-card">
+                    <div class="stat-value" x-text="stats.game_modes ? stats.game_modes['1'] || 0 : 0"></div>
+                    <div class="stat-label">Best of 1</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" x-text="stats.game_modes ? stats.game_modes['3'] || 0 : 0"></div>
+                    <div class="stat-label">Best of 3</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" x-text="stats.game_modes ? stats.game_modes['5'] || 0 : 0"></div>
+                    <div class="stat-label">Best of 5</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Games List -->
+    <div class="card">
+        <div class="card-header">
+            <h2 style="margin-bottom: 0;">Games</h2>
+        </div>
+
+        <!-- Filters -->
+        <div class="card-body" style="border-bottom: 1px solid var(--color-bg-lighter);">
+            <div class="grid grid-2">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label">Status Filter</label>
+                    <select class="form-select" x-model="filter" @change="loadGames()">
+                        <option value="">All</option>
+                        <option value="waiting">Waiting</option>
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label">Auto Refresh</label>
+                    <select class="form-select" x-model="refreshInterval" @change="updateRefreshInterval()">
+                        <option value="0">Off</option>
+                        <option value="5000">5 seconds</option>
+                        <option value="10000">10 seconds</option>
+                        <option value="30000">30 seconds</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="card-body">
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Games Table -->
+        <div x-show="!loading" class="card-body" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--color-bg-lighter);">
+                        <th style="padding: var(--spacing-md); text-align: left;">Code</th>
+                        <th style="padding: var(--spacing-md); text-align: left;">Status</th>
+                        <th style="padding: var(--spacing-md); text-align: left;">Mode</th>
+                        <th style="padding: var(--spacing-md); text-align: left;">Winner</th>
+                        <th style="padding: var(--spacing-md); text-align: left;">Created</th>
+                        <th style="padding: var(--spacing-md); text-align: left;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="game in games" :key="game.id">
+                        <tr style="border-bottom: 1px solid var(--color-bg-lighter);">
+                            <td style="padding: var(--spacing-md); font-family: monospace; font-weight: 700;">
+                                <span x-text="game.game_code"></span>
+                            </td>
+                            <td style="padding: var(--spacing-md);">
+                                <span
+                                    :style="getStatusColor(game.status)"
+                                    style="padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600;"
+                                    x-text="game.status"
+                                ></span>
+                            </td>
+                            <td style="padding: var(--spacing-md);">
+                                <span x-text="'Best of ' + game.best_of"></span>
+                            </td>
+                            <td style="padding: var(--spacing-md);">
+                                <span x-text="game.winner || '-'"></span>
+                            </td>
+                            <td style="padding: var(--spacing-md); font-size: 0.875rem;">
+                                <span x-text="formatDate(game.created_at)"></span>
+                            </td>
+                            <td style="padding: var(--spacing-md);">
+                                <button @click="viewGame(game)" class="btn btn-primary" style="padding: var(--spacing-sm) var(--spacing-md); font-size: 0.875rem;">
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+
+            <div x-show="games.length === 0" class="text-center text-muted" style="padding: var(--spacing-2xl);">
+                No games found
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Detail Modal -->
+    <div
+        x-show="selectedGame"
+        @click.self="selectedGame = null"
+        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: var(--spacing-md);"
+        x-transition
+    >
+        <div
+            @click.stop
+            class="card"
+            style="max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto;"
+        >
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin-bottom: 0;">Game Details</h2>
+                <button @click="selectedGame = null" class="btn btn-danger" style="padding: var(--spacing-sm) var(--spacing-md);">
+                    ✕
+                </button>
+            </div>
+
+            <template x-if="selectedGame">
+                <div class="card-body">
+                    <!-- Game Info -->
+                    <div class="grid grid-2 mb-2">
+                        <div>
+                            <p class="text-muted" style="margin-bottom: var(--spacing-xs);">Game Code</p>
+                            <p style="font-family: monospace; font-size: 1.5rem; font-weight: 700;" x-text="selectedGame.game_code"></p>
+                        </div>
+                        <div>
+                            <p class="text-muted" style="margin-bottom: var(--spacing-xs);">Status</p>
+                            <p style="font-size: 1.25rem; font-weight: 700; text-transform: capitalize;" x-text="selectedGame.status"></p>
+                        </div>
+                        <div>
+                            <p class="text-muted" style="margin-bottom: var(--spacing-xs);">Game Mode</p>
+                            <p x-text="'Best of ' + selectedGame.best_of"></p>
+                        </div>
+                        <div>
+                            <p class="text-muted" style="margin-bottom: var(--spacing-xs);">Winner</p>
+                            <p style="text-transform: capitalize;" x-text="selectedGame.winner || 'N/A'"></p>
+                        </div>
+                        <div>
+                            <p class="text-muted" style="margin-bottom: var(--spacing-xs);">Created</p>
+                            <p style="font-size: 0.875rem;" x-text="formatDate(selectedGame.created_at)"></p>
+                        </div>
+                        <div>
+                            <p class="text-muted" style="margin-bottom: var(--spacing-xs);">Completed</p>
+                            <p style="font-size: 0.875rem;" x-text="selectedGame.completed_at ? formatDate(selectedGame.completed_at) : 'N/A'"></p>
+                        </div>
+                    </div>
+
+                    <!-- Rounds -->
+                    <div x-show="gameRounds.length > 0" class="mt-2">
+                        <h3 class="mb-1">Rounds</h3>
+                        <template x-for="round in gameRounds" :key="round.id">
+                            <div class="card mb-1" style="background: var(--color-bg);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong>Round <span x-text="round.round_number"></span></strong>
+                                    </div>
+                                    <div style="display: flex; gap: var(--spacing-lg);">
+                                        <div>
+                                            <span class="text-muted">Host:</span>
+                                            <span style="font-size: 1.5rem; margin-left: var(--spacing-sm);" x-text="getChoiceEmoji(round.host_choice)"></span>
+                                            <span x-text="round.host_choice || '?'"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-muted">Guest:</span>
+                                            <span style="font-size: 1.5rem; margin-left: var(--spacing-sm);" x-text="getChoiceEmoji(round.guest_choice)"></span>
+                                            <span x-text="round.guest_choice || '?'"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-muted">Winner:</span>
+                                            <strong style="margin-left: var(--spacing-sm); text-transform: capitalize;" x-text="round.winner || '-'"></strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Inject API URLs for admin.js
+    window.ADMIN_API_URLS = {
+        stats: '{{ url_for("admin.get_stats") }}',
+        games: '{{ url_for("admin.list_games") }}',
+        gameDetail: '{{ url_for("admin.view_game", game_id="PLACEHOLDER") }}',
+        home: '{{ url_for("game.index") }}'
+    };
+</script>
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}
