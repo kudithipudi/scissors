@@ -10,7 +10,7 @@ tests/
 ├── test_helpers.py          # Test utility functions
 ├── test_game_service.py     # Test game service logic
 ├── test_api.py              # Test API endpoints
-├── test_routes.py           # Test Flask routes
+├── test_routes.py           # Test FastAPI page/game routes
 └── test_integration.py      # End-to-end integration tests
 ```
 
@@ -102,7 +102,7 @@ xdg-open htmlcov/index.html  # Linux
 
 ### Unit Tests (`test_helpers.py`, `test_game_service.py`)
 - Test individual functions in isolation
-- Mock external dependencies (Supabase, etc.)
+- Mock the `Game`/`Round` model layer (SQLite via aiosqlite)
 - Fast execution
 - High coverage of edge cases
 
@@ -113,9 +113,9 @@ xdg-open htmlcov/index.html  # Linux
 - Error handling
 
 ### Route Tests (`test_routes.py`)
-- Test Flask routes
+- Test FastAPI routes
 - Verify page rendering
-- Test session management
+- Test session management (Starlette `SessionMiddleware`)
 - Redirect logic
 
 ### Integration Tests (`test_integration.py`)
@@ -158,11 +158,11 @@ class TestNewFeature:
 ### Using Fixtures
 
 ```python
-def test_with_fixture(client, sample_game):
+async def test_with_fixture(client, sample_game):
     """Test using fixtures from conftest.py."""
-    # client is a test Flask client
+    # client is an async httpx.AsyncClient wired to the FastAPI app over ASGI
     # sample_game is sample game data
-    response = client.get(f"/game/{sample_game['game_code']}")
+    response = await client.get(f"/game/{sample_game['game_code']}")
     assert response.status_code == 200
 ```
 

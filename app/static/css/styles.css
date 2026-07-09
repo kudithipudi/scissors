@@ -138,6 +138,31 @@ body {
     transition: color var(--transition-fast);
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.lab-link {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+
+.lab-link:hover {
+    color: var(--color-primary);
+}
+
+.app-footer a {
+    color: var(--color-text-muted);
+    text-decoration: underline;
+}
+
+.app-footer a:hover {
+    color: var(--color-primary);
+}
+
 /* ===== Typography ===== */
 h1, h2, h3, h4, h5, h6 {
     font-weight: 700;

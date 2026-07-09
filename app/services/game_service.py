@@ -1,6 +1,7 @@
 """Game service with core game logic."""
 from typing import Optional, Dict, Any, Tuple
-from flask import current_app, session
+
+from app.config import settings
 from app.models import Game, Round
 from app.utils.helpers import (
     generate_game_code,
@@ -14,7 +15,7 @@ class GameService:
     """Service class for game operations."""
 
     @staticmethod
-    def create_game(best_of: int, host_session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    async def create_game(best_of: int, host_session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Create a new game.
 
@@ -29,26 +30,26 @@ class GameService:
         max_attempts = 10
         for _ in range(max_attempts):
             game_code = generate_game_code()
-            existing = Game.get_by_code(game_code)
+            existing = await Game.get_by_code(game_code)
             if not existing:
                 break
         else:
             return None, "Failed to generate unique game code. Please try again."
 
         # Create game in database
-        timeout_minutes = current_app.config['GAME_TIMEOUT_MINUTES']
-        game = Game.create(game_code, best_of, host_session_id, timeout_minutes)
+        timeout_minutes = settings.GAME_TIMEOUT_MINUTES
+        game = await Game.create(game_code, best_of, host_session_id, timeout_minutes)
 
         if not game:
             return None, "Failed to create game. Please try again."
 
         # Create first round
-        Round.create(game['id'], 1)
+        await Round.create(game['id'], 1)
 
         return game, None
 
     @staticmethod
-    def join_game(game_code: str, guest_session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    async def join_game(game_code: str, guest_session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Join an existing game as guest.
 
@@ -56,7 +57,7 @@ class GameService:
             Tuple of (game_data, error_message)
         """
         # Get game
-        game = Game.get_by_code(game_code)
+        game = await Game.get_by_code(game_code)
         if not game:
             return None, "Game not found."
 
@@ -73,7 +74,7 @@ class GameService:
             return None, "You are the host. Cannot join as guest."
 
         # Join game
-        updated_game = Game.join_game(game['id'], guest_session_id)
+        updated_game = await Game.join_game(game['id'], guest_session_id)
 
         if not updated_game:
             return None, "Failed to join game."
@@ -81,14 +82,14 @@ class GameService:
         return updated_game, None
 
     @staticmethod
-    def cancel_game(game_code: str, session_id: str) -> Tuple[bool, Optional[str]]:
+    async def cancel_game(game_code: str, session_id: str) -> Tuple[bool, Optional[str]]:
         """
         Cancel a game.
 
         Returns:
             Tuple of (success, error_message)
         """
-        game = Game.get_by_code(game_code)
+        game = await Game.get_by_code(game_code)
         if not game:
             return False, "Game not found."
 
@@ -100,17 +101,17 @@ class GameService:
         if game['status'] not in ['waiting', 'active']:
             return False, f"Cannot cancel {game['status']} game."
 
-        Game.cancel_game(game['id'])
+        await Game.cancel_game(game['id'])
         return True, None
 
     @staticmethod
-    def get_game_state(game_code: str) -> Optional[Dict[str, Any]]:
+    async def get_game_state(game_code: str) -> Optional[Dict[str, Any]]:
         """Get full game state including rounds."""
-        game = Game.get_by_code(game_code)
+        game = await Game.get_by_code(game_code)
         if not game:
             return None
 
-        rounds = Round.get_all_by_game(game['id'])
+        rounds = await Round.get_all_by_game(game['id'])
 
         return {
             'game': game,
@@ -119,34 +120,34 @@ class GameService:
         }
 
     @staticmethod
-    def record_shake(game_code: str, player: str, shake_count: int) -> Tuple[bool, Optional[str]]:
+    async def record_shake(game_code: str, player: str, shake_count: int) -> Tuple[bool, Optional[str]]:
         """
         Record shake count for a player.
 
         Returns:
             Tuple of (success, error_message)
         """
-        game = Game.get_by_code(game_code)
+        game = await Game.get_by_code(game_code)
         if not game or game['status'] != 'active':
             return False, "Invalid game state."
 
         # Get current round
-        rounds = Round.get_all_by_game(game['id'])
+        rounds = await Round.get_all_by_game(game['id'])
         if not rounds:
             return False, "No active round."
 
         current_round = rounds[-1]
 
         # Validate shake count
-        if shake_count < 0 or shake_count > current_app.config['REQUIRED_SHAKES']:
+        if shake_count < 0 or shake_count > settings.REQUIRED_SHAKES:
             return False, "Invalid shake count."
 
         # Update shake count
-        Round.update_shakes(current_round['id'], player, shake_count)
+        await Round.update_shakes(current_round['id'], player, shake_count)
         return True, None
 
     @staticmethod
-    def submit_choice(game_code: str, player: str, choice: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    async def submit_choice(game_code: str, player: str, choice: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Submit player choice for current round.
 
@@ -157,12 +158,12 @@ class GameService:
         if not is_valid_choice(choice):
             return None, "Invalid choice."
 
-        game = Game.get_by_code(game_code)
+        game = await Game.get_by_code(game_code)
         if not game or game['status'] != 'active':
             return None, "Invalid game state."
 
         # Get current round
-        rounds = Round.get_all_by_game(game['id'])
+        rounds = await Round.get_all_by_game(game['id'])
         if not rounds:
             return None, "No active round."
 
@@ -173,10 +174,10 @@ class GameService:
             return current_round, None
 
         # Set choice
-        Round.set_choice(current_round['id'], player, choice)
+        await Round.set_choice(current_round['id'], player, choice)
 
         # Check if both players have chosen
-        updated_round = Round.get_by_game_and_round(game['id'], current_round['round_number'])
+        updated_round = await Round.get_by_game_and_round(game['id'], current_round['round_number'])
         host_choice = updated_round.get('host_choice')
         guest_choice = updated_round.get('guest_choice')
 
@@ -187,20 +188,20 @@ class GameService:
 
             # Determine round winner
             winner = determine_winner(host_choice, guest_choice)
-            Round.complete_round(updated_round['id'], winner)
+            await Round.complete_round(updated_round['id'], winner)
 
             # Re-fetch game to check if it was already completed by concurrent request
-            game = Game.get_by_code(game_code)
+            game = await Game.get_by_code(game_code)
             if game['status'] == 'completed':
                 return updated_round, None
 
             # Check if game is complete
-            all_rounds = Round.get_all_by_game(game['id'])
+            all_rounds = await Round.get_all_by_game(game['id'])
             game_winner = calculate_game_winner(all_rounds, game['best_of'])
 
             if game_winner:
                 # Game complete
-                Game.complete_game(game['id'], game_winner)
+                await Game.complete_game(game['id'], game_winner)
             else:
                 # Only create next round if an incomplete one doesn't already exist
                 has_pending_round = any(
@@ -209,7 +210,7 @@ class GameService:
                 )
                 if not has_pending_round:
                     next_round_number = max(r['round_number'] for r in all_rounds) + 1
-                    Round.create(game['id'], next_round_number)
+                    await Round.create(game['id'], next_round_number)
 
             return updated_round, None
 

@@ -1,43 +1,58 @@
 """Pytest configuration and fixtures."""
-import pytest
+import base64
+import json
 import os
-from unittest.mock import MagicMock, patch
-from app import create_app
+
+# Must be set before app.config / app.main are imported anywhere, since the
+# SessionMiddleware bakes SECRET_KEY in at import time.
+os.environ.setdefault('SECRET_KEY', 'test-secret-key')
+os.environ.setdefault('SESSION_COOKIE_SECURE', 'false')
+os.environ.setdefault('ADMIN_PASSWORD', 'test-admin-password')
+
+import itsdangerous
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+
+from app.config import settings
+from app.db import init_db
+
+TEST_SECRET_KEY = os.environ['SECRET_KEY']
+
+
+@pytest_asyncio.fixture
+async def app(tmp_path):
+    """Point settings at a throwaway SQLite file and yield the FastAPI app."""
+    settings.DB_PATH = str(tmp_path / 'scissors_test.db')
+    await init_db()
+
+    from app.main import app as fastapi_app
+    yield fastapi_app
+
+
+@pytest_asyncio.fixture
+async def client(app):
+    """Async test client (httpx over ASGI, no real network)."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        yield c
 
 
 @pytest.fixture
-def app():
-    """Create application for testing."""
-    os.environ['FLASK_ENV'] = 'testing'
-    os.environ['SUPABASE_URL'] = 'https://test.supabase.co'
-    os.environ['SUPABASE_KEY'] = 'test-key'
+def set_session():
+    """Directly set the signed session cookie, equivalent to Flask's session_transaction()."""
 
-    app = create_app()
-    app.config['TESTING'] = True
-    app.config['SECRET_KEY'] = 'test-secret-key'
+    def _set(client, **data):
+        signer = itsdangerous.TimestampSigner(TEST_SECRET_KEY)
+        payload = base64.b64encode(json.dumps(data).encode("utf-8"))
+        signed = signer.sign(payload).decode("utf-8")
+        # Clear first: httpx stores the server's Set-Cookie under a normalized
+        # domain (e.g. "testserver.local"), distinct from a bare .set() call,
+        # so without this the stale cookie would still be sent alongside ours.
+        client.cookies.clear()
+        client.cookies.set("session", signed)
 
-    yield app
-
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
-
-
-@pytest.fixture
-def runner(app):
-    """Create test CLI runner."""
-    return app.test_cli_runner()
-
-
-@pytest.fixture
-def mock_supabase():
-    """Mock Supabase client for testing."""
-    with patch('app.services.supabase_service.create_client') as mock:
-        mock_client = MagicMock()
-        mock.return_value = mock_client
-        yield mock_client
+    return _set
 
 
 @pytest.fixture

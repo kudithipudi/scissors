@@ -1,36 +1,47 @@
 """Background job scheduler."""
-from apscheduler.schedulers.background import BackgroundScheduler
+import logging
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-import atexit
+
+logger = logging.getLogger("scissors.scheduler")
+
+_scheduler: AsyncIOScheduler | None = None
 
 
-def cleanup_expired_games():
+async def cleanup_expired_games():
     """Clean up expired games (run every minute)."""
     from app.models import Game
     try:
-        count = Game.cleanup_expired()
+        count = await Game.cleanup_expired()
         if count > 0:
-            print(f"Cleaned up {count} expired games")
+            logger.info("Cleaned up %d expired games", count)
     except Exception as e:
-        print(f"Error cleaning up games: {e}")
+        logger.error("Error cleaning up games: %s", e)
 
 
-def start_scheduler(app):
-    """Start the background scheduler."""
-    scheduler = BackgroundScheduler()
+def start_scheduler() -> AsyncIOScheduler:
+    """Start the background scheduler. Call stop_scheduler() on shutdown."""
+    global _scheduler
+    scheduler = AsyncIOScheduler()
 
-    # Add job to cleanup expired games every minute
     scheduler.add_job(
         func=cleanup_expired_games,
         trigger=IntervalTrigger(minutes=1),
         id='cleanup_expired_games',
         name='Cleanup expired games',
-        replace_existing=True
+        replace_existing=True,
     )
 
     scheduler.start()
+    _scheduler = scheduler
+    logger.info("Background scheduler started")
+    return scheduler
 
-    # Shut down the scheduler when exiting the app
-    atexit.register(lambda: scheduler.shutdown())
 
-    print("Background scheduler started")
+def stop_scheduler() -> None:
+    """Shut down the background scheduler, if running."""
+    global _scheduler
+    if _scheduler is not None:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None

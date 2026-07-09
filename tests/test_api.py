@@ -1,22 +1,25 @@
 """Test API endpoints."""
 import pytest
 from unittest.mock import patch
-import json
 
 
 class TestStatsAPI:
     """Test statistics API."""
 
-    @patch('app.routes.api.Statistics')
-    def test_get_stats(self, mock_stats, client):
+    @patch('app.routers.api.Statistics')
+    async def test_get_stats(self, mock_stats, client):
         """Test getting public statistics."""
-        mock_stats.get_active_game_count.return_value = 5
-        mock_stats.get_game_count.return_value = 100
+        async def fake_active_count():
+            return 5
+        async def fake_total_count():
+            return 100
+        mock_stats.get_active_game_count = fake_active_count
+        mock_stats.get_game_count = fake_total_count
 
-        response = client.get('/api/stats')
+        response = await client.get('/api/stats')
 
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert data['active_games'] == 5
         assert data['total_games'] == 100
 
@@ -24,27 +27,31 @@ class TestStatsAPI:
 class TestGameStateAPI:
     """Test game state API."""
 
-    @patch('app.routes.api.GameService')
-    def test_get_game_state(self, mock_service, client):
+    @patch('app.routers.api.GameService')
+    async def test_get_game_state(self, mock_service, client):
         """Test getting game state."""
-        mock_service.get_game_state.return_value = {
-            'game': {'id': 'game-id', 'status': 'active'},
-            'rounds': [],
-            'current_round': 1
-        }
+        async def fake_get_game_state(code):
+            return {
+                'game': {'id': 'game-id', 'status': 'active'},
+                'rounds': [],
+                'current_round': 1
+            }
+        mock_service.get_game_state = fake_get_game_state
 
-        response = client.get('/api/game/ABC123/state')
+        response = await client.get('/api/game/ABC123/state')
 
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert data['game']['status'] == 'active'
 
-    @patch('app.routes.api.GameService')
-    def test_get_game_state_not_found(self, mock_service, client):
+    @patch('app.routers.api.GameService')
+    async def test_get_game_state_not_found(self, mock_service, client):
         """Test getting state of non-existent game."""
-        mock_service.get_game_state.return_value = None
+        async def fake_get_game_state(code):
+            return None
+        mock_service.get_game_state = fake_get_game_state
 
-        response = client.get('/api/game/FAKE/state')
+        response = await client.get('/api/game/FAKE/state')
 
         assert response.status_code == 404
 
@@ -52,34 +59,38 @@ class TestGameStateAPI:
 class TestShakeAPI:
     """Test shake recording API."""
 
-    @patch('app.routes.api.Game')
-    @patch('app.routes.api.GameService')
-    def test_record_shake(self, mock_service, mock_game, client):
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_record_shake(self, mock_game, mock_service, client, set_session):
         """Test recording shake count."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'status': 'active',
-            'host_session_id': 'host-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'status': 'active',
+                'host_session_id': 'host-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
-        mock_service.record_shake.return_value = (True, None)
 
-        response = client.post(
+        async def fake_record_shake(code, role, count):
+            return True, None
+        mock_service.record_shake = fake_record_shake
+
+        response = await client.post(
             '/api/game/ABC123/shake',
             json={'shake_count': 2}
         )
 
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert data['success'] is True
         assert data['shake_count'] == 2
 
-    def test_record_shake_no_session(self, client):
+    async def test_record_shake_no_session(self, client):
         """Test recording shake without session."""
-        response = client.post(
+        response = await client.post(
             '/api/game/ABC123/shake',
             json={'shake_count': 2}
         )
@@ -90,50 +101,55 @@ class TestShakeAPI:
 class TestChoiceAPI:
     """Test choice submission API."""
 
-    @patch('app.routes.api.Game')
-    @patch('app.routes.api.GameService')
-    def test_submit_choice(self, mock_service, mock_game, client):
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_submit_choice(self, mock_game, mock_service, client, set_session):
         """Test submitting a choice."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'status': 'active',
-            'host_session_id': 'host-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'status': 'active',
+                'host_session_id': 'host-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
-        mock_service.submit_choice.return_value = (
-            {'id': 'round-id', 'winner': 'host'},
-            None
-        )
 
-        response = client.post(
+        async def fake_submit_choice(code, role, choice):
+            return {'id': 'round-id', 'winner': 'host'}, None
+        mock_service.submit_choice = fake_submit_choice
+
+        response = await client.post(
             '/api/game/ABC123/choice',
             json={'choice': 'rock'}
         )
 
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert data['success'] is True
         assert data['round']['winner'] == 'host'
 
-    @patch('app.routes.api.Game')
-    @patch('app.routes.api.GameService')
-    def test_submit_invalid_choice(self, mock_service, mock_game, client):
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_submit_invalid_choice(self, mock_game, mock_service, client, set_session):
         """Test submitting invalid choice."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'status': 'active',
-            'host_session_id': 'host-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'status': 'active',
+                'host_session_id': 'host-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
-        mock_service.submit_choice.return_value = (None, "Invalid choice.")
 
-        response = client.post(
+        async def fake_submit_choice(code, role, choice):
+            return None, "Invalid choice."
+        mock_service.submit_choice = fake_submit_choice
+
+        response = await client.post(
             '/api/game/ABC123/choice',
             json={'choice': 'invalid'}
         )
@@ -144,42 +160,44 @@ class TestChoiceAPI:
 class TestPlayAgainAPI:
     """Test play again API."""
 
-    @patch('app.routes.api.Game')
-    @patch('app.routes.api.GameService')
-    def test_play_again(self, mock_service, mock_game, client):
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_play_again(self, mock_game, mock_service, client, set_session):
         """Test creating a new game after completion."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'old-game-id',
-            'status': 'completed',
-            'best_of': 3,
-            'host_session_id': 'host-id'
-        }
-        mock_service.create_game.return_value = (
-            {'game_code': 'NEW123', 'id': 'new-game-id'},
-            None
-        )
+        async def fake_get_by_code(code):
+            return {
+                'id': 'old-game-id',
+                'status': 'completed',
+                'best_of': 3,
+                'host_session_id': 'host-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
 
-        response = client.post('/api/game/ABC123/play-again')
+        async def fake_create_game(best_of, host_session_id):
+            return {'game_code': 'NEW123', 'id': 'new-game-id'}, None
+        mock_service.create_game = fake_create_game
+
+        response = await client.post('/api/game/ABC123/play-again')
 
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert data['game_code'] == 'NEW123'
 
-    @patch('app.routes.api.Game')
-    def test_play_again_only_host(self, mock_game, client):
+    @patch('app.routers.api.Game')
+    async def test_play_again_only_host(self, mock_game, client, set_session):
         """Test only host can start new game."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'guest-id'
+        set_session(client, session_id='guest-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'status': 'completed',
-            'host_session_id': 'host-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'status': 'completed',
+                'host_session_id': 'host-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
 
-        response = client.post('/api/game/ABC123/play-again')
+        response = await client.post('/api/game/ABC123/play-again')
 
         assert response.status_code == 403

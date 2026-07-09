@@ -1,119 +1,114 @@
 """Test device and gyroscope detection functionality."""
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 
 class TestDeviceDetection:
     """Test device type detection."""
 
-    def test_detect_mobile_ios(self, client):
+    async def test_detect_mobile_ios(self, client):
         """Test iOS device detection."""
-        with client:
-            headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)'}
-            response = client.get('/', headers=headers)
-            assert response.status_code == 200
-            # Should render without errors
+        headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)'}
+        response = await client.get('/', headers=headers)
+        assert response.status_code == 200
+        # Should render without errors
 
-    def test_detect_mobile_android(self, client):
+    async def test_detect_mobile_android(self, client):
         """Test Android device detection."""
-        with client:
-            headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36'}
-            response = client.get('/', headers=headers)
-            assert response.status_code == 200
+        headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36'}
+        response = await client.get('/', headers=headers)
+        assert response.status_code == 200
 
-    def test_detect_desktop(self, client):
+    async def test_detect_desktop(self, client):
         """Test desktop browser detection."""
-        with client:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            response = client.get('/', headers=headers)
-            assert response.status_code == 200
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = await client.get('/', headers=headers)
+        assert response.status_code == 200
 
-    def test_detect_tablet(self, client):
+    async def test_detect_tablet(self, client):
         """Test tablet device detection."""
-        with client:
-            headers = {'User-Agent': 'Mozilla/5.0 (iPad; CPU OS 13_0 like Mac OS X)'}
-            response = client.get('/', headers=headers)
-            assert response.status_code == 200
+        headers = {'User-Agent': 'Mozilla/5.0 (iPad; CPU OS 13_0 like Mac OS X)'}
+        response = await client.get('/', headers=headers)
+        assert response.status_code == 200
 
 
 class TestShakeDetectionEndpoint:
     """Test shake detection and manual choice fallback."""
 
-    @patch('app.routes.api.Game')
-    @patch('app.routes.api.GameService')
-    def test_manual_choice_submission(self, mock_service, mock_game, client):
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_manual_choice_submission(self, mock_game, mock_service, client, set_session):
         """Test submitting manual choice when shake detection fails."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'status': 'active',
-            'host_session_id': 'host-id'
-        }
+        async def fake_get_by_code(code):
+            return {'id': 'game-id', 'status': 'active', 'host_session_id': 'host-id'}
+        mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
-        mock_service.submit_choice.return_value = (
-            {'id': 'round-id', 'winner': None},
-            None
-        )
+
+        async def fake_submit_choice(code, role, choice):
+            return {'id': 'round-id', 'winner': None}, None
+        mock_service.submit_choice = fake_submit_choice
 
         # Submit a manual choice
-        response = client.post(
+        response = await client.post(
             '/api/game/ABC123/choice',
             json={'choice': 'rock'}
         )
 
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert data['success'] is True
 
-    @patch('app.routes.game.Game')
-    @patch('app.routes.game.GameService')
-    def test_game_page_includes_shake_js(self, mock_service, mock_game, client):
+    @patch('app.routers.game.GameService')
+    @patch('app.routers.game.Game')
+    async def test_game_page_includes_shake_js(self, mock_game, mock_service, client, set_session):
         """Test that game page includes shake detection script."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'game_code': 'ABC123',
-            'status': 'active',
-            'best_of': 3,
-            'host_session_id': 'host-id',
-            'guest_session_id': 'guest-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'game_code': 'ABC123',
+                'status': 'active',
+                'best_of': 3,
+                'host_session_id': 'host-id',
+                'guest_session_id': 'guest-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
 
-        response = client.get('/game/ABC123')
+        response = await client.get('/game/ABC123')
 
         assert response.status_code == 200
-        assert b'shake.js' in response.data
+        assert b'shake.js' in response.content
 
-    @patch('app.routes.game.Game')
-    @patch('app.routes.game.GameService')
-    def test_game_page_has_manual_choice_ui(self, mock_service, mock_game, client):
+    @patch('app.routers.game.GameService')
+    @patch('app.routers.game.Game')
+    async def test_game_page_has_manual_choice_ui(self, mock_game, mock_service, client, set_session):
         """Test that game page includes manual choice fallback UI."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'game_code': 'ABC123',
-            'status': 'active',
-            'best_of': 3,
-            'host_session_id': 'host-id',
-            'guest_session_id': 'guest-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'game_code': 'ABC123',
+                'status': 'active',
+                'best_of': 3,
+                'host_session_id': 'host-id',
+                'guest_session_id': 'guest-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
 
-        response = client.get('/game/ABC123')
+        response = await client.get('/game/ABC123')
 
         assert response.status_code == 200
         # Check for manual choice buttons
-        assert b'selectManualChoice' in response.data
-        assert b'Motion Sensors Unavailable' in response.data
+        assert b'selectManualChoice' in response.content
+        assert b'Motion Sensors Unavailable' in response.content
 
 
 class TestJavaScriptDeviceDetection:
@@ -180,30 +175,31 @@ class TestJavaScriptDeviceDetection:
 class TestErrorHandling:
     """Test error handling for device detection failures."""
 
-    @patch('app.routes.game.Game')
-    @patch('app.routes.game.GameService')
-    def test_game_works_without_motion_sensors(self, mock_service, mock_game, client):
+    @patch('app.routers.game.GameService')
+    @patch('app.routers.game.Game')
+    async def test_game_works_without_motion_sensors(self, mock_game, mock_service, client, set_session):
         """Test that game is still playable without motion sensors."""
-        with client.session_transaction() as sess:
-            sess['session_id'] = 'host-id'
+        set_session(client, session_id='host-id')
 
-        mock_game.get_by_code.return_value = {
-            'id': 'game-id',
-            'game_code': 'ABC123',
-            'status': 'active',
-            'best_of': 1,
-            'host_session_id': 'host-id',
-            'guest_session_id': 'guest-id'
-        }
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'game_code': 'ABC123',
+                'status': 'active',
+                'best_of': 1,
+                'host_session_id': 'host-id',
+                'guest_session_id': 'guest-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
 
         # Should still render the game page
-        response = client.get('/game/ABC123')
+        response = await client.get('/game/ABC123')
         assert response.status_code == 200
 
         # Should have fallback UI
-        assert b'selectManualChoice' in response.data
+        assert b'selectManualChoice' in response.content
 
 
 class TestAccessibilityFallback:
@@ -343,15 +339,13 @@ class TestIOSPermissionHandling:
         # All behaviors must be implemented
         assert all(expected_behavior.values())
 
-    @patch('app.routes.game.Game')
-    @patch('app.routes.game.GameService')
-    def test_device_test_page_has_permission_button(self, mock_service, mock_game, client):
+    async def test_device_test_page_has_permission_button(self, client):
         """Test that device test page includes permission request button."""
-        response = client.get('/device-simple-test')
+        response = await client.get('/device-simple-test')
 
         assert response.status_code == 200
         # Check for permission request button
-        assert b'requestPermBtn' in response.data or b'Request' in response.data
+        assert b'requestPermBtn' in response.content or b'Request' in response.content
 
     def test_cache_busting_version_parameter(self):
         """

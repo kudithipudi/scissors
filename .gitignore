@@ -47,6 +47,9 @@ Thumbs.db
 # Gunicorn
 *.sock
 
+# Data (SQLite db + uploads)
+data/
+
 # Testing
 .pytest_cache/
 .coverage
@@ -59,8 +62,3 @@ instance/
 # Temporary files
 *.tmp
 *.bak
-
-# SQLite databases
-*.db
-*.sqlite
-*.sqlite3

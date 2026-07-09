@@ -136,7 +136,7 @@
 
             async loadStats() {
                 try {
-                    const response = await fetch('{{ url_for("api.get_stats") }}');
+                    const response = await fetch('{{ url_for("api_stats") }}');
                     if (response.ok) {
                         const data = await response.json();
                         this.activeGames = data.active_games || 0;
@@ -150,7 +150,7 @@
             async hostGame() {
                 this.loading = true;
                 try {
-                    const response = await fetch('{{ url_for("game.create_game") }}', {
+                    const response = await fetch('{{ url_for("create_game") }}', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -163,7 +163,7 @@
                     const data = await response.json();
 
                     if (response.ok) {
-                        window.location.href = '{{ url_for("game.view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', data.game_code);
+                        window.location.href = '{{ url_for("view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', data.game_code);
                     } else {
                         handleError(data.error || 'Failed to create game');
                     }
@@ -185,7 +185,7 @@
 
                 try {
                     // Navigate to game page
-                    window.location.href = '{{ url_for("game.view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', code);
+                    window.location.href = '{{ url_for("view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', code);
                 } catch (error) {
                     handleError('Invalid game code');
                 } finally {

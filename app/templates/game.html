@@ -3,7 +3,7 @@
 {% block title %}Game {{ game.game_code }}{% endblock %}
 
 {% block extra_head %}
-<script src="{{ url_for('static', filename='js/shake.js') }}?v=2.1"></script>
+<script src="{{ url_for('static', path='js/shake.js') }}?v=2.1"></script>
 {% endblock %}
 
 {% block content %}
@@ -234,7 +234,7 @@
                 </div>
 
                 <div class="grid grid-2 mt-2" style="gap: var(--spacing-md);">
-                    <a href="{{ url_for('game.index') }}" class="btn btn-outline btn-lg">🏠 Home</a>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline btn-lg">🏠 Home</a>
                     {% if player_role == 'host' %}
                     <button @click="playAgain()" class="btn btn-primary btn-lg">🔄 Play Again</button>
                     {% endif %}
@@ -249,7 +249,7 @@
             <div class="card-body">
                 <h2>Game Cancelled</h2>
                 <p class="text-muted">This game has been cancelled.</p>
-                <a href="{{ url_for('game.index') }}" class="btn btn-primary btn-lg mt-2">Go Home</a>
+                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-2">Go Home</a>
             </div>
         </div>
     </div>
@@ -263,13 +263,13 @@
 
     // API URLs
     const API_URLS = {
-        shake: '{{ url_for("api.record_shake", game_code=game.game_code) }}',
-        choice: '{{ url_for("api.submit_choice", game_code=game.game_code) }}',
-        state: '{{ url_for("api.get_game_state", game_code=game.game_code) }}',
-        cancel: '{{ url_for("game.cancel_game", game_code=game.game_code) }}',
-        playAgain: '{{ url_for("api.play_again", game_code=game.game_code) }}',
-        home: '{{ url_for("game.index") }}',
-        gameView: '{{ url_for("game.view_game", game_code="PLACEHOLDER") }}'
+        shake: '{{ url_for("api_record_shake", game_code=game.game_code) }}',
+        choice: '{{ url_for("api_submit_choice", game_code=game.game_code) }}',
+        state: '{{ url_for("api_game_state", game_code=game.game_code) }}',
+        cancel: '{{ url_for("cancel_game", game_code=game.game_code) }}',
+        playAgain: '{{ url_for("api_play_again", game_code=game.game_code) }}',
+        home: '{{ url_for("index") }}',
+        gameView: '{{ url_for("view_game", game_code="PLACEHOLDER") }}'
     };
 
     function gameState() {

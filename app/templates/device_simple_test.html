@@ -45,7 +45,7 @@
 
     <div id="results"></div>
 
-    <script src="{{ url_for('static', filename='js/shake.js') }}?v=2.1"></script>
+    <script src="{{ url_for('static', path='js/shake.js') }}?v=2.1"></script>
     <script>
         // Wait for DOM to be ready
         document.addEventListener('DOMContentLoaded', async function() {
@@ -164,7 +164,7 @@
             // Add back button
             const backDiv = document.createElement('div');
             backDiv.style.marginTop = '20px';
-            backDiv.innerHTML = '<a href="{{ url_for("game.index") }}" style="color: #6366f1; text-decoration: none; font-size: 1.1em;">← Back to Home</a>';
+            backDiv.innerHTML = '<a href="{{ url_for("index") }}" style="color: #6366f1; text-decoration: none; font-size: 1.1em;">← Back to Home</a>';
             resultsDiv.appendChild(backDiv);
         });
     </script>

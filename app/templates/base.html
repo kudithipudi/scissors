@@ -4,16 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Play Rock Paper Scissors with friends - Real-time multiplayer with phone shake detection">
+    <link rel="icon" href="/favicon.ico">
     <title>{% block title %}Rock Paper Scissors{% endblock %}</title>
 
     <!-- CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}">
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-
-    <!-- Supabase for real-time updates -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
@@ -22,11 +20,14 @@
         <!-- Header -->
         <header class="app-header">
             <div class="container">
-                <a href="{{ url_for('game.index') }}" class="logo">
+                <a href="{{ url_for('index') }}" class="logo">
                     <span class="logo-icon">✊✋✌️</span>
                     <span class="logo-text">Rock Paper Scissors</span>
                 </a>
-                {% block header_actions %}{% endblock %}
+                <div class="header-right">
+                    {% block header_actions %}{% endblock %}
+                    <a href="https://lab.kudithipudi.org" class="lab-link">&larr; lab.kudithipudi.org</a>
+                </div>
             </div>
         </header>
 
@@ -41,6 +42,7 @@
         <footer class="app-footer">
             <div class="container">
                 <p>Built with ❤️ in Texas, USA • Copyright Vinay Kudithipudi</p>
+                <p>Part of the <a href="https://lab.kudithipudi.org/">Kudithipudi AI Lab</a></p>
             </div>
         </footer>
     </div>

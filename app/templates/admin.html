@@ -3,7 +3,7 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block header_actions %}
-<a href="{{ url_for('game.index') }}" class="btn btn-outline">🏠 Home</a>
+<a href="{{ url_for('index') }}" class="btn btn-outline">🏠 Home</a>
 {% endblock %}
 
 {% block content %}
@@ -227,11 +227,11 @@
 <script>
     // Inject API URLs for admin.js
     window.ADMIN_API_URLS = {
-        stats: '{{ url_for("admin.get_stats") }}',
-        games: '{{ url_for("admin.list_games") }}',
-        gameDetail: '{{ url_for("admin.view_game", game_id="PLACEHOLDER") }}',
-        home: '{{ url_for("game.index") }}'
+        stats: '{{ url_for("admin_stats") }}',
+        games: '{{ url_for("admin_list_games") }}',
+        gameDetail: '{{ url_for("admin_view_game", game_id="PLACEHOLDER") }}',
+        home: '{{ url_for("index") }}'
     };
 </script>
-<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('static', path='js/admin.js') }}"></script>
 {% endblock %}

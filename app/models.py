@@ -1,208 +1,277 @@
-"""Database models and queries."""
-from datetime import datetime, timedelta
+"""Database models and queries (SQLite, async via aiosqlite)."""
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
-from app.services.supabase_service import SupabaseService
+
+from app.db import get_connection, generate_id, now_iso
+
+_GAME_COLUMNS = {
+    'game_code', 'status', 'best_of', 'host_session_id', 'guest_session_id',
+    'winner', 'created_at', 'started_at', 'completed_at', 'expires_at',
+}
+_ROUND_COLUMNS = {
+    'game_id', 'round_number', 'host_choice', 'guest_choice', 'host_shakes',
+    'guest_shakes', 'winner', 'created_at', 'completed_at',
+}
+
+
+def _row_to_dict(row) -> Optional[Dict[str, Any]]:
+    return dict(row) if row is not None else None
 
 
 class Game:
     """Game model for database operations."""
 
     @staticmethod
-    def create(game_code: str, best_of: int, host_session_id: str, timeout_minutes: int) -> Dict[str, Any]:
+    async def create(game_code: str, best_of: int, host_session_id: str, timeout_minutes: int) -> Dict[str, Any]:
         """Create a new game."""
-        client = SupabaseService.get_client()
-        expires_at = datetime.utcnow() + timedelta(minutes=timeout_minutes)
+        game_id = generate_id()
+        created_at = now_iso()
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=timeout_minutes)).isoformat()
 
-        data = {
-            'game_code': game_code,
-            'status': 'waiting',
-            'best_of': best_of,
-            'host_session_id': host_session_id,
-            'expires_at': expires_at.isoformat()
-        }
+        async with get_connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO vs_games
+                    (id, game_code, status, best_of, host_session_id, guest_session_id,
+                     winner, created_at, started_at, completed_at, expires_at)
+                VALUES (?, ?, 'waiting', ?, ?, NULL, NULL, ?, NULL, NULL, ?)
+                """,
+                (game_id, game_code, best_of, host_session_id, created_at, expires_at),
+            )
 
-        result = client.table('vs_games').insert(data).execute()
-        return result.data[0] if result.data else None
+        return await Game.get_by_id(game_id)
 
     @staticmethod
-    def get_by_code(game_code: str) -> Optional[Dict[str, Any]]:
+    async def get_by_code(game_code: str) -> Optional[Dict[str, Any]]:
         """Get game by game code."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('*').eq('game_code', game_code).execute()
-        return result.data[0] if result.data else None
+        async with get_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM vs_games WHERE game_code = ?", (game_code,))
+            row = await cursor.fetchone()
+        return _row_to_dict(row)
 
     @staticmethod
-    def get_by_id(game_id: str) -> Optional[Dict[str, Any]]:
+    async def get_by_id(game_id: str) -> Optional[Dict[str, Any]]:
         """Get game by ID."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('*').eq('id', game_id).execute()
-        return result.data[0] if result.data else None
+        async with get_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM vs_games WHERE id = ?", (game_id,))
+            row = await cursor.fetchone()
+        return _row_to_dict(row)
 
     @staticmethod
-    def update(game_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def update(game_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update game by ID."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').update(updates).eq('id', game_id).execute()
-        return result.data[0] if result.data else None
+        updates = {k: v for k, v in updates.items() if k in _GAME_COLUMNS}
+        if not updates:
+            return await Game.get_by_id(game_id)
+
+        set_clause = ", ".join(f"{col} = ?" for col in updates)
+        params = list(updates.values()) + [game_id]
+
+        async with get_connection() as conn:
+            await conn.execute(f"UPDATE vs_games SET {set_clause} WHERE id = ?", params)
+
+        return await Game.get_by_id(game_id)
 
     @staticmethod
-    def join_game(game_id: str, guest_session_id: str) -> Optional[Dict[str, Any]]:
+    async def join_game(game_id: str, guest_session_id: str) -> Optional[Dict[str, Any]]:
         """Join game as guest."""
         updates = {
             'guest_session_id': guest_session_id,
             'status': 'active',
-            'started_at': datetime.utcnow().isoformat()
+            'started_at': now_iso(),
         }
-        return Game.update(game_id, updates)
+        return await Game.update(game_id, updates)
 
     @staticmethod
-    def cancel_game(game_id: str) -> Optional[Dict[str, Any]]:
+    async def cancel_game(game_id: str) -> Optional[Dict[str, Any]]:
         """Cancel a game."""
         updates = {
             'status': 'cancelled',
-            'completed_at': datetime.utcnow().isoformat()
+            'completed_at': now_iso(),
         }
-        return Game.update(game_id, updates)
+        return await Game.update(game_id, updates)
 
     @staticmethod
-    def complete_game(game_id: str, winner: str) -> Optional[Dict[str, Any]]:
+    async def complete_game(game_id: str, winner: str) -> Optional[Dict[str, Any]]:
         """Complete a game with winner."""
         updates = {
             'status': 'completed',
             'winner': winner,
-            'completed_at': datetime.utcnow().isoformat()
+            'completed_at': now_iso(),
         }
-        return Game.update(game_id, updates)
+        return await Game.update(game_id, updates)
 
     @staticmethod
-    def get_all_active() -> List[Dict[str, Any]]:
+    async def get_all_active() -> List[Dict[str, Any]]:
         """Get all active games."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('*').in_('status', ['waiting', 'active']).execute()
-        return result.data if result.data else []
+        async with get_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM vs_games WHERE status IN ('waiting', 'active')")
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
 
     @staticmethod
-    def get_all_with_filters(status: Optional[str] = None, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    async def get_all_with_filters(status: Optional[str] = None, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """Get games with optional filters."""
-        client = SupabaseService.get_client()
-        query = client.table('vs_games').select('*')
+        query = "SELECT * FROM vs_games"
+        params: List[Any] = []
 
         if status:
-            query = query.eq('status', status)
+            query += " WHERE status = ?"
+            params.append(status)
 
-        result = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
-        return result.data if result.data else []
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        async with get_connection() as conn:
+            cursor = await conn.execute(query, params)
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
 
     @staticmethod
-    def cleanup_expired() -> int:
+    async def cleanup_expired() -> int:
         """Mark expired games as cancelled."""
-        client = SupabaseService.get_client()
-        now = datetime.utcnow().isoformat()
-
-        result = client.table('vs_games').update({
-            'status': 'cancelled',
-            'completed_at': now
-        }).eq('status', 'waiting').lt('expires_at', now).execute()
-
-        return len(result.data) if result.data else 0
+        now = now_iso()
+        async with get_connection() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE vs_games
+                SET status = 'cancelled', completed_at = ?
+                WHERE status = 'waiting' AND expires_at < ?
+                """,
+                (now, now),
+            )
+            return cursor.rowcount
 
 
 class Round:
     """Round model for database operations."""
 
     @staticmethod
-    def create(game_id: str, round_number: int) -> Dict[str, Any]:
+    async def create(game_id: str, round_number: int) -> Dict[str, Any]:
         """Create a new round."""
-        client = SupabaseService.get_client()
-        data = {
-            'game_id': game_id,
-            'round_number': round_number,
-            'host_shakes': 0,
-            'guest_shakes': 0
-        }
-        result = client.table('vs_rounds').insert(data).execute()
-        return result.data[0] if result.data else None
+        round_id = generate_id()
+        created_at = now_iso()
+
+        async with get_connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO vs_rounds
+                    (id, game_id, round_number, host_choice, guest_choice,
+                     host_shakes, guest_shakes, winner, created_at, completed_at)
+                VALUES (?, ?, ?, NULL, NULL, 0, 0, NULL, ?, NULL)
+                """,
+                (round_id, game_id, round_number, created_at),
+            )
+
+        async with get_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM vs_rounds WHERE id = ?", (round_id,))
+            row = await cursor.fetchone()
+        return _row_to_dict(row)
 
     @staticmethod
-    def get_by_game_and_round(game_id: str, round_number: int) -> Optional[Dict[str, Any]]:
+    async def get_by_game_and_round(game_id: str, round_number: int) -> Optional[Dict[str, Any]]:
         """Get round by game ID and round number."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_rounds').select('*').eq('game_id', game_id).eq('round_number', round_number).execute()
-        return result.data[0] if result.data else None
+        async with get_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT * FROM vs_rounds WHERE game_id = ? AND round_number = ?",
+                (game_id, round_number),
+            )
+            row = await cursor.fetchone()
+        return _row_to_dict(row)
 
     @staticmethod
-    def get_all_by_game(game_id: str) -> List[Dict[str, Any]]:
+    async def get_all_by_game(game_id: str) -> List[Dict[str, Any]]:
         """Get all rounds for a game."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_rounds').select('*').eq('game_id', game_id).order('round_number').execute()
-        return result.data if result.data else []
+        async with get_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT * FROM vs_rounds WHERE game_id = ? ORDER BY round_number",
+                (game_id,),
+            )
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
 
     @staticmethod
-    def update(round_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def update(round_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update round by ID."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_rounds').update(updates).eq('id', round_id).execute()
-        return result.data[0] if result.data else None
+        updates = {k: v for k, v in updates.items() if k in _ROUND_COLUMNS}
+        if updates:
+            set_clause = ", ".join(f"{col} = ?" for col in updates)
+            params = list(updates.values()) + [round_id]
+            async with get_connection() as conn:
+                await conn.execute(f"UPDATE vs_rounds SET {set_clause} WHERE id = ?", params)
+
+        async with get_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM vs_rounds WHERE id = ?", (round_id,))
+            row = await cursor.fetchone()
+        return _row_to_dict(row)
 
     @staticmethod
-    def update_shakes(round_id: str, player: str, shake_count: int) -> Optional[Dict[str, Any]]:
+    async def update_shakes(round_id: str, player: str, shake_count: int) -> Optional[Dict[str, Any]]:
         """Update shake count for a player."""
+        if player not in ('host', 'guest'):
+            raise ValueError("player must be 'host' or 'guest'")
         field = f'{player}_shakes'
-        updates = {field: shake_count}
-        return Round.update(round_id, updates)
+        return await Round.update(round_id, {field: shake_count})
 
     @staticmethod
-    def set_choice(round_id: str, player: str, choice: str) -> Optional[Dict[str, Any]]:
+    async def set_choice(round_id: str, player: str, choice: str) -> Optional[Dict[str, Any]]:
         """Set player choice for round."""
+        if player not in ('host', 'guest'):
+            raise ValueError("player must be 'host' or 'guest'")
         field = f'{player}_choice'
-        updates = {field: choice}
-        return Round.update(round_id, updates)
+        return await Round.update(round_id, {field: choice})
 
     @staticmethod
-    def complete_round(round_id: str, winner: str) -> Optional[Dict[str, Any]]:
+    async def complete_round(round_id: str, winner: str) -> Optional[Dict[str, Any]]:
         """Complete a round with winner."""
         updates = {
             'winner': winner,
-            'completed_at': datetime.utcnow().isoformat()
+            'completed_at': now_iso(),
         }
-        return Round.update(round_id, updates)
+        return await Round.update(round_id, updates)
 
 
 class Statistics:
     """Statistics queries."""
 
     @staticmethod
-    def get_game_count() -> int:
+    async def get_game_count() -> int:
         """Get total game count."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('id', count='exact').execute()
-        return result.count if hasattr(result, 'count') else 0
+        async with get_connection() as conn:
+            cursor = await conn.execute("SELECT COUNT(*) AS c FROM vs_games")
+            row = await cursor.fetchone()
+        return row['c'] if row else 0
 
     @staticmethod
-    def get_active_game_count() -> int:
+    async def get_active_game_count() -> int:
         """Get active game count."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('id', count='exact').in_('status', ['waiting', 'active']).execute()
-        return result.count if hasattr(result, 'count') else 0
+        async with get_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT COUNT(*) AS c FROM vs_games WHERE status IN ('waiting', 'active')"
+            )
+            row = await cursor.fetchone()
+        return row['c'] if row else 0
 
     @staticmethod
-    def get_completed_game_count() -> int:
+    async def get_completed_game_count() -> int:
         """Get completed game count."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('id', count='exact').eq('status', 'completed').execute()
-        return result.count if hasattr(result, 'count') else 0
+        async with get_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT COUNT(*) AS c FROM vs_games WHERE status = 'completed'"
+            )
+            row = await cursor.fetchone()
+        return row['c'] if row else 0
 
     @staticmethod
-    def get_game_mode_stats() -> Dict[str, int]:
+    async def get_game_mode_stats() -> Dict[int, int]:
         """Get statistics by game mode (best_of)."""
-        client = SupabaseService.get_client()
-        result = client.table('vs_games').select('best_of').eq('status', 'completed').execute()
-
         stats = {1: 0, 3: 0, 5: 0}
-        if result.data:
-            for game in result.data:
-                best_of = game.get('best_of')
-                if best_of in stats:
-                    stats[best_of] += 1
-
+        async with get_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT best_of, COUNT(*) AS c FROM vs_games WHERE status = 'completed' GROUP BY best_of"
+            )
+            rows = await cursor.fetchall()
+        for row in rows:
+            if row['best_of'] in stats:
+                stats[row['best_of']] = row['c']
         return stats
