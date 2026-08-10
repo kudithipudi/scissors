@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.db import init_db
+from app.utils.rate_limit import reset_rate_limiter
 
 TEST_SECRET_KEY = os.environ['SECRET_KEY']
 
@@ -24,6 +25,7 @@ TEST_SECRET_KEY = os.environ['SECRET_KEY']
 async def app(tmp_path):
     """Point settings at a throwaway SQLite file and yield the FastAPI app."""
     settings.DB_PATH = str(tmp_path / 'scissors_test.db')
+    reset_rate_limiter()
     await init_db()
 
     from app.main import app as fastapi_app

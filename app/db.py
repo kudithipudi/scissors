@@ -30,9 +30,10 @@ async def init_db() -> None:
 @asynccontextmanager
 async def get_connection():
     """Yield a connection with row access by column name and FKs enabled."""
-    conn = await aiosqlite.connect(settings.DB_PATH)
+    conn = await aiosqlite.connect(settings.DB_PATH, timeout=10)
     conn.row_factory = aiosqlite.Row
     await conn.execute("PRAGMA foreign_keys = ON")
+    await conn.execute("PRAGMA busy_timeout = 5000")
     try:
         yield conn
         await conn.commit()

@@ -8,6 +8,7 @@ from app.services.game_service import GameService
 from app.services.qr_service import QRService
 from app.models import Game
 from app.templating import templates
+from app.utils.rate_limit import is_rate_limited
 
 router = APIRouter()
 
@@ -41,6 +42,12 @@ async def device_simple_test(request: Request):
 @router.post("/game/create", name="create_game")
 async def create_game(request: Request):
     """Create a new game."""
+    if is_rate_limited(request):
+        return JSONResponse(
+            {'error': 'Too many games created from this IP. Please try again later.'},
+            status_code=429,
+        )
+
     if 'session_id' not in request.session:
         request.session['session_id'] = str(uuid.uuid4())
 

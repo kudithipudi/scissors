@@ -41,6 +41,27 @@ app.add_middleware(
     https_only=settings.SESSION_COOKIE_SECURE,
 )
 
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add hardening response headers on every response.
+
+    accelerometer / gyroscope / magnetometer are allowed for our own origin
+    because shake detection (devicemotion) depends on them.
+    """
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = (
+        "accelerometer=(self), ambient-light-sensor=(), autoplay=(), camera=(), "
+        "display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), "
+        "gyroscope=(self), magnetometer=(self), microphone=(), midi=(), payment=(), "
+        "picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), "
+        "wake-lock=(), web-share=(), xr-spatial-tracking=()"
+    )
+    return response
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(game.router, tags=["game"])

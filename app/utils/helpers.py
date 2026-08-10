@@ -60,8 +60,10 @@ def get_choice_emoji(choice: str) -> str:
 
 def format_timestamp(timestamp: str) -> str:
     """Format ISO timestamp to readable format."""
+    if not isinstance(timestamp, str):
+        return timestamp
     try:
         dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         return dt.strftime('%Y-%m-%d %H:%M:%S')
-    except:
+    except ValueError:
         return timestamp

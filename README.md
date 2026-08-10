@@ -40,6 +40,7 @@ FastAPI + SQLite (see Migration notes below).
 │   │   └── qr_service.py       # QR code + join URL generation
 │   ├── utils/
 │   │   ├── helpers.py          # Game code gen, winner logic, formatting
+│   │   ├── rate_limit.py       # In-memory sliding-window rate limiter (game creation)
 │   │   └── scheduler.py        # APScheduler setup (expired-game cleanup)
 │   ├── static/                 # css/, js/ (shake.js, admin.js), images/
 │   └── templates/              # base.html + page templates
@@ -73,10 +74,9 @@ Visit `http://localhost:8000/`. The SQLite DB is created automatically
 venv/bin/python -m pytest
 ```
 
-77 tests cover routes, the API, game logic, device/shake detection
-behavior, and a full integration game flow against a real (throwaway)
-SQLite database per test.
-
+91 tests cover routes, the API, game logic, rate limiting, security
+headers, device/shake detection behavior, and a full integration game
+flow against a real (throwaway) SQLite database per test.
 ## Deploy
 
 Runs under Gunicorn (`gunicorn.conf.py`, 1 `UvicornWorker`) bound to a unix
@@ -104,7 +104,7 @@ Logs: `journalctl -u scissors -f` (stdout/stderr, no file logging).
 | `DB_PATH` | Path to the SQLite database file | `data/scissors.db` |
 | `ADMIN_PASSWORD` | Password for `/admin/*` (HTTP Basic; any username accepted) | dev placeholder — **set a real one in prod** |
 | `GAME_TIMEOUT_MINUTES` | Minutes before an unjoined "waiting" game expires | `2` |
-| `MAX_GAMES_PER_IP_PER_HOUR` | Reserved for future rate limiting (not currently enforced) | `10` |
+| `MAX_GAMES_PER_IP_PER_HOUR` | Game-creation rate limit per client IP (sliding 1-hour window, honors `X-Forwarded-For`) | `10` |
 
 ## Game flow
 
@@ -115,6 +115,20 @@ Logs: `journalctl -u scissors -f` (stdout/stderr, no file logging).
 
 Background cleanup (APScheduler, every minute) cancels "waiting" games
 that expired before a guest joined.
+
+## Security & reliability
+
+- **Rate limiting** — game creation (`/game/create` and the "play again"
+  endpoint) is limited to `MAX_GAMES_PER_IP_PER_HOUR` games per IP per hour
+  (sliding window, in-memory; single-worker deployment). Returns `429`.
+- **Security headers** — every response carries `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
+  strict-origin-when-cross-origin`, and a locked-down `Permissions-Policy`
+  that still allows `accelerometer`/`gyroscope`/`magnetometer` for the app's
+  own origin so shake detection keeps working.
+- **SQLite concurrency** — connections set `PRAGMA busy_timeout = 5000` (and
+  use a 10s connect timeout) to avoid `database is locked` errors when both
+  players submit around the same time.
 
 ## Admin dashboard
 

@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from app.services.game_service import GameService
 from app.models import Game, Statistics
+from app.utils.rate_limit import is_rate_limited
 
 router = APIRouter()
 
@@ -106,6 +107,12 @@ async def play_again(request: Request, game_code: str):
     """Start a new game (play again)."""
     if 'session_id' not in request.session:
         return JSONResponse({'error': 'Invalid session'}, status_code=401)
+
+    if is_rate_limited(request):
+        return JSONResponse(
+            {'error': 'Too many games created from this IP. Please try again later.'},
+            status_code=429,
+        )
 
     old_game = await Game.get_by_code(game_code.upper())
     if not old_game:

@@ -174,3 +174,11 @@ class TestTimestampFormatting:
         """Test invalid timestamp returns original."""
         invalid = 'not-a-timestamp'
         assert format_timestamp(invalid) == invalid
+
+    def test_none_timestamp(self):
+        """Test None returns None unchanged."""
+        assert format_timestamp(None) is None
+
+    def test_non_string_timestamp(self):
+        """Test non-string input returns unchanged."""
+        assert format_timestamp(12345) == 12345
