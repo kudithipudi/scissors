@@ -19,10 +19,13 @@
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <div class="container">
+            <div class="container app-header-inner">
                 <a href="{{ url_for('index') }}" class="logo">
-                    <span class="logo-icon">✊✋✌️</span>
-                    <span class="logo-text">Rock Paper Scissors</span>
+                    <span class="logo-tile">S</span>
+                    <span class="logo-text">
+                        <span class="logo-name">Rock Paper Scissors</span>
+                        <span class="logo-tagline">Shake-to-play multiplayer</span>
+                    </span>
                 </a>
                 <div class="header-right">
                     {% block header_actions %}{% endblock %}
@@ -41,7 +44,7 @@
         <!-- Footer -->
         <footer class="app-footer">
             <div class="container">
-                <p>Built with ❤️ in Texas, USA • Copyright Vinay Kudithipudi</p>
+                <p>Rock Paper Scissors — real-time multiplayer with phone shake detection.</p>
                 <p>Part of the <a href="https://lab.kudithipudi.org/">Kudithipudi AI Lab</a></p>
             </div>
         </footer>

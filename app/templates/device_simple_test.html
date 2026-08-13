@@ -10,18 +10,18 @@
             max-width: 800px;
             margin: 20px auto;
             padding: 20px;
-            background: #0f172a;
-            color: #f1f5f9;
+            background: #f8fafc;
+            color: #0f172a;
         }
         .test-result {
-            background: #1e293b;
+            background: #ffffff;
             padding: 15px;
             margin: 10px 0;
             border-radius: 8px;
             border-left: 4px solid #6366f1;
         }
-        .pass { border-left-color: #10b981; }
-        .fail { border-left-color: #ef4444; }
+        .pass { border-left-color: #059669; }
+        .fail { border-left-color: #e11d48; }
         .result-label {
             font-weight: bold;
             margin-bottom: 5px;
@@ -31,7 +31,7 @@
             font-size: 1.2em;
         }
         .info {
-            background: #334155;
+            background: #e2e8f0;
             padding: 10px;
             margin: 5px 0;
             border-radius: 4px;
@@ -112,7 +112,7 @@
                         permDiv.className = 'test-result';
                         permDiv.innerHTML = `
                             <div class="result-label">📱 iOS Permission Required</div>
-                            <button id="requestPermBtn" style="background: #6366f1; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1.1em; cursor: pointer; margin-top: 10px;">
+                            <button id="requestPermBtn" style="background: #4f46e5; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1.1em; cursor: pointer; margin-top: 10px;">
                                 Request Motion Sensor Permission
                             </button>
                             <div id="permResult" style="margin-top: 10px;"></div>
@@ -164,7 +164,7 @@
             // Add back button
             const backDiv = document.createElement('div');
             backDiv.style.marginTop = '20px';
-            backDiv.innerHTML = '<a href="{{ url_for("index") }}" style="color: #6366f1; text-decoration: none; font-size: 1.1em;">← Back to Home</a>';
+            backDiv.innerHTML = '<a href="{{ url_for("index") }}" style="color: #4f46e5; text-decoration: none; font-size: 1.1em;">← Back to Home</a>';
             resultsDiv.appendChild(backDiv);
         });
     </script>
