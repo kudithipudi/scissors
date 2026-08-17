@@ -33,36 +33,47 @@ class TestClientIPResolution:
         request = _make_request([])
         assert client_ip(request) == '127.0.0.1'
 
+    def test_prefers_x_real_ip_over_socket_peer(self):
+        request = _make_request([(b'x-real-ip', b'203.0.113.10')])
+        assert client_ip(request) == '203.0.113.10'
+
+    def test_prefers_x_forwarded_for_over_x_real_ip(self):
+        request = _make_request([
+            (b'x-forwarded-for', b'203.0.113.9'),
+            (b'x-real-ip', b'203.0.113.10'),
+        ])
+        assert client_ip(request) == '203.0.113.9'
+
 
 class TestRateLimiter:
     """Test the check-and-record semantics of is_rate_limited."""
 
-    def test_allows_requests_under_limit(self):
+    async def test_allows_requests_under_limit(self, app):
         request = _make_request([(b'x-forwarded-for', b'203.0.113.50')])
         for _ in range(9):
-            assert is_rate_limited(request) is False
+            assert await is_rate_limited(request) is False
 
-    def test_blocks_at_limit(self):
+    async def test_blocks_at_limit(self, app):
         request = _make_request([(b'x-forwarded-for', b'203.0.113.51')])
         for _ in range(10):
-            assert is_rate_limited(request) is False
-        assert is_rate_limited(request) is True
+            assert await is_rate_limited(request) is False
+        assert await is_rate_limited(request) is True
 
-    def test_does_not_record_limited_request(self):
+    async def test_does_not_record_limited_request(self, app):
         request = _make_request([(b'x-forwarded-for', b'203.0.113.52')])
         for _ in range(10):
-            is_rate_limited(request)
-        assert is_rate_limited(request) is True
+            await is_rate_limited(request)
+        assert await is_rate_limited(request) is True
         # A limited request is not recorded, so it stays blocked (no growth).
-        assert is_rate_limited(request) is True
+        assert await is_rate_limited(request) is True
 
-    def test_limits_are_per_ip(self):
+    async def test_limits_are_per_ip(self, app):
         request_a = _make_request([(b'x-forwarded-for', b'203.0.113.60')])
         request_b = _make_request([(b'x-forwarded-for', b'203.0.113.61')])
         for _ in range(10):
-            assert is_rate_limited(request_a) is False
-        assert is_rate_limited(request_a) is True
-        assert is_rate_limited(request_b) is False
+            assert await is_rate_limited(request_a) is False
+        assert await is_rate_limited(request_a) is True
+        assert await is_rate_limited(request_b) is False
 
 
 class TestRateLimitedEndpoints:

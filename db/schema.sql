@@ -36,3 +36,14 @@ CREATE INDEX IF NOT EXISTS idx_vs_games_created_at ON vs_games(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_vs_games_expires_at ON vs_games(expires_at);
 CREATE INDEX IF NOT EXISTS idx_vs_rounds_game_id ON vs_rounds(game_id);
 CREATE INDEX IF NOT EXISTS idx_vs_rounds_game_round ON vs_rounds(game_id, round_number);
+
+-- One row per rate-limited request (sliding-window log), used to throttle
+-- game creation. Hits older than the limiting window are pruned as new ones
+-- are recorded, so this stays small.
+CREATE TABLE IF NOT EXISTS rate_limit_hits (
+    ip TEXT NOT NULL,
+    route TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limit_hits_route_ip_time ON rate_limit_hits (route, ip, created_at);

@@ -42,7 +42,7 @@ async def device_simple_test(request: Request):
 @router.post("/game/create", name="create_game")
 async def create_game(request: Request):
     """Create a new game."""
-    if is_rate_limited(request):
+    if await is_rate_limited(request):
         return JSONResponse(
             {'error': 'Too many games created from this IP. Please try again later.'},
             status_code=429,

@@ -25,8 +25,8 @@ TEST_SECRET_KEY = os.environ['SECRET_KEY']
 async def app(tmp_path):
     """Point settings at a throwaway SQLite file and yield the FastAPI app."""
     settings.DB_PATH = str(tmp_path / 'scissors_test.db')
-    reset_rate_limiter()
     await init_db()
+    await reset_rate_limiter()
 
     from app.main import app as fastapi_app
     yield fastapi_app

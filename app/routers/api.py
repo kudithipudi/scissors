@@ -108,7 +108,7 @@ async def play_again(request: Request, game_code: str):
     if 'session_id' not in request.session:
         return JSONResponse({'error': 'Invalid session'}, status_code=401)
 
-    if is_rate_limited(request):
+    if await is_rate_limited(request):
         return JSONResponse(
             {'error': 'Too many games created from this IP. Please try again later.'},
             status_code=429,

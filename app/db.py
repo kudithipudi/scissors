@@ -44,6 +44,37 @@ async def get_connection():
         await conn.close()
 
 
+async def check_and_record_rate_limit(
+    conn: aiosqlite.Connection,
+    *,
+    ip: str,
+    route: str,
+    limit: int,
+    window_seconds: int,
+) -> bool:
+    """Sliding-window log check-and-record. Prunes hits for `route` older
+    than `window_seconds`, then returns whether (route, ip) is still under
+    `limit` within the window -- recording the hit if so."""
+    offset = f"-{window_seconds} seconds"
+    await conn.execute(
+        "DELETE FROM rate_limit_hits WHERE route = ?"
+        " AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+        (route, offset),
+    )
+    cursor = await conn.execute(
+        "SELECT COUNT(*) FROM rate_limit_hits WHERE route = ? AND ip = ?"
+        " AND created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+        (route, ip, offset),
+    )
+    row = await cursor.fetchone()
+    if row[0] >= limit:
+        return False
+    await conn.execute(
+        "INSERT INTO rate_limit_hits (ip, route) VALUES (?, ?)", (ip, route)
+    )
+    return True
+
+
 def generate_id() -> str:
     """Generate a UUID4 string (replaces Postgres uuid_generate_v4())."""
     return str(uuid.uuid4())
