@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Play Rock Paper Scissors with friends - Real-time multiplayer with phone shake detection">
+    <meta name="theme-color" content="#f8fafc">
     <link rel="icon" href="/favicon.ico">
     <title>{% block title %}Rock Paper Scissors{% endblock %}</title>
 
@@ -11,11 +12,13 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}">
 
     <!-- Alpine.js -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <a href="#main" class="skip-link">Skip to content</a>
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
@@ -23,7 +26,7 @@
                 <a href="{{ url_for('index') }}" class="logo">
                     <span class="logo-tile">S</span>
                     <span class="logo-text">
-                        <span class="logo-name">Rock Paper Scissors</span>
+                        <span class="logo-name" translate="no">Rock Paper Scissors</span>
                         <span class="logo-tagline">Shake-to-play multiplayer</span>
                     </span>
                 </a>
@@ -35,7 +38,7 @@
         </header>
 
         <!-- Main Content -->
-        <main class="app-main">
+        <main id="main" class="app-main">
             <div class="container">
                 {% block content %}{% endblock %}
             </div>
@@ -51,7 +54,7 @@
     </div>
 
     <!-- Toast Notifications -->
-    <div id="toast-container"></div>
+    <div id="toast-container" role="status" aria-live="polite"></div>
 
     <!-- Base JavaScript -->
     <script>

@@ -15,6 +15,7 @@ function adminDashboard() {
         games: [],
         selectedGame: null,
         gameRounds: [],
+        lastFocused: null,
 
         // UI State
         loading: false,
@@ -24,6 +25,12 @@ function adminDashboard() {
 
         // Initialization
         async init() {
+            // Restore the status filter from the URL so refresh/deep-links keep it
+            const params = new URLSearchParams(window.location.search);
+            const status = params.get('status');
+            if (status) {
+                this.filter = status;
+            }
             await this.loadStats();
             await this.loadGames();
         },
@@ -31,9 +38,7 @@ function adminDashboard() {
         // Load statistics
         async loadStats() {
             try {
-                const response = await fetch(window.ADMIN_API_URLS.stats, {
-                    headers: this.getAuthHeaders()
-                });
+                const response = await fetch(window.ADMIN_API_URLS.stats);
 
                 if (response.ok) {
                     const data = await response.json();
@@ -43,6 +48,8 @@ function adminDashboard() {
                             cancelled_games: data.stats.total_games - data.stats.completed_games - data.stats.active_games
                         };
                     }
+                } else if (response.status === 401) {
+                    window.location.href = window.ADMIN_API_URLS.login;
                 }
             } catch (error) {
                 console.error('Failed to load stats:', error);
@@ -59,15 +66,13 @@ function adminDashboard() {
                     url += '?status=' + encodeURIComponent(this.filter);
                 }
 
-                const response = await fetch(url, {
-                    headers: this.getAuthHeaders()
-                });
+                const response = await fetch(url);
 
                 if (response.ok) {
                     const data = await response.json();
                     this.games = data.games || [];
                 } else if (response.status === 401) {
-                    this.promptAuth();
+                    window.location.href = window.ADMIN_API_URLS.login;
                 }
             } catch (error) {
                 console.error('Failed to load games:', error);
@@ -77,25 +82,81 @@ function adminDashboard() {
             }
         },
 
+        // Sync the status filter to the URL so it survives refresh/deep-links
+        applyFilter() {
+            const params = new URLSearchParams(window.location.search);
+            if (this.filter) {
+                params.set('status', this.filter);
+            } else {
+                params.delete('status');
+            }
+            const query = params.toString();
+            window.history.replaceState({}, '', query ? '?' + query : window.location.pathname);
+            this.loadGames();
+        },
+
         // View game details
         async viewGame(game) {
+            this.lastFocused = document.activeElement;
             this.selectedGame = game;
             this.gameRounds = [];
 
             try {
                 const url = window.ADMIN_API_URLS.gameDetail.replace('PLACEHOLDER', game.id);
-                const response = await fetch(url, {
-                    headers: this.getAuthHeaders()
-                });
+                const response = await fetch(url);
 
                 if (response.ok) {
                     const data = await response.json();
                     this.selectedGame = data.game;
                     this.gameRounds = data.rounds || [];
+                } else if (response.status === 401) {
+                    window.location.href = window.ADMIN_API_URLS.login;
                 }
             } catch (error) {
                 console.error('Failed to load game details:', error);
                 handleError('Failed to load game details');
+            }
+
+            // Move focus into the dialog once it is shown
+            this.$nextTick(() => {
+                const modal = this.$refs.gameModal;
+                const closeBtn = modal && modal.querySelector('[aria-label="Close"]');
+                if (closeBtn) {
+                    closeBtn.focus();
+                }
+            });
+        },
+
+        // Close the modal and restore focus to the trigger
+        closeModal() {
+            if (!this.selectedGame) return;
+            this.selectedGame = null;
+            if (this.lastFocused && this.lastFocused.focus) {
+                this.lastFocused.focus();
+            }
+        },
+
+        // Trap Tab focus inside the modal
+        trapFocus(event) {
+            if (event.key !== 'Tab' || !this.selectedGame) return;
+
+            const modal = this.$refs.gameModal;
+            if (!modal) return;
+
+            const focusable = modal.querySelectorAll(
+                'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
             }
         },
 
@@ -114,30 +175,6 @@ function adminDashboard() {
                     this.loadStats();
                     this.loadGames();
                 }, interval);
-            }
-        },
-
-        // Get auth headers (basic auth)
-        getAuthHeaders() {
-            const password = localStorage.getItem('admin_password');
-            if (password) {
-                const credentials = btoa(':' + password);
-                return {
-                    'Authorization': 'Basic ' + credentials
-                };
-            }
-            return {};
-        },
-
-        // Prompt for authentication
-        promptAuth() {
-            const password = prompt('Enter admin password:');
-            if (password) {
-                localStorage.setItem('admin_password', password);
-                this.loadStats();
-                this.loadGames();
-            } else {
-                window.location.href = window.ADMIN_API_URLS.home;
             }
         },
 
@@ -175,15 +212,3 @@ function adminDashboard() {
         }
     }
 }
-
-// Auto-prompt for auth on page load
-document.addEventListener('DOMContentLoaded', () => {
-    if (!localStorage.getItem('admin_password')) {
-        const password = prompt('Enter admin password:');
-        if (password) {
-            localStorage.setItem('admin_password', password);
-        } else {
-            window.location.href = window.ADMIN_API_URLS.home;
-        }
-    }
-});

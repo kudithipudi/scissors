@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f8fafc">
     <title>Simple Device Test</title>
     <style>
         body {
@@ -12,6 +13,7 @@
             padding: 20px;
             background: #f8fafc;
             color: #0f172a;
+            color-scheme: light;
         }
         .test-result {
             background: #ffffff;
@@ -122,7 +124,7 @@
                         document.getElementById('requestPermBtn').addEventListener('click', async function() {
                             const btn = this;
                             btn.disabled = true;
-                            btn.textContent = 'Requesting...';
+                            btn.textContent = 'Requesting…';
 
                             const granted = await window.DeviceCapabilities.requestPermission();
                             const resultDiv = document.getElementById('permResult');

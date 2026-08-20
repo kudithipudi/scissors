@@ -41,8 +41,8 @@
                 <p class="text-muted">Create a new game and invite a friend</p>
                 <form @submit.prevent="hostGame">
                     <div class="form-group">
-                        <label class="form-label">Game Mode</label>
-                        <select class="form-select" x-model="bestOf" required>
+                        <label class="form-label" for="game-mode">Game Mode</label>
+                        <select id="game-mode" class="form-select" x-model="bestOf" required>
                             <option value="1">Best of 1</option>
                             <option value="3" selected>Best of 3</option>
                             <option value="5">Best of 5</option>
@@ -50,7 +50,7 @@
                     </div>
                     <button type="submit" class="btn btn-primary btn-lg btn-block" :disabled="loading">
                         <span x-show="!loading">🎮 Host Game</span>
-                        <span x-show="loading">Creating...</span>
+                        <span x-show="loading">Creating…</span>
                     </button>
                 </form>
             </div>
@@ -65,20 +65,24 @@
                 <p class="text-muted">Enter the game code or scan QR code</p>
                 <form @submit.prevent="joinGame">
                     <div class="form-group">
-                        <label class="form-label">Game Code</label>
+                        <label class="form-label" for="game-code">Game Code</label>
                         <input
+                            id="game-code"
                             type="text"
+                            name="game_code"
                             class="form-input"
                             x-model="gameCode"
-                            placeholder="Enter code"
+                            placeholder="Enter code (e.g. ABC123…)"
                             maxlength="8"
+                            autocomplete="off"
+                            spellcheck="false"
                             required
                             style="text-transform: uppercase; text-align: center; font-size: 1.5rem; font-family: monospace;"
                         >
                     </div>
                     <button type="submit" class="btn btn-secondary btn-lg btn-block" :disabled="loading">
                         <span x-show="!loading">🎯 Join Game</span>
-                        <span x-show="loading">Joining...</span>
+                        <span x-show="loading">Joining…</span>
                     </button>
                 </form>
             </div>
@@ -92,17 +96,17 @@
         </div>
         <div class="card-body text-center">
             <div class="grid grid-3">
-                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: all var(--transition-base);">
+                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: background-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);">
                     <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(79, 70, 229, 0.3));">📱</div>
                     <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">1. Create or Join</h4>
                     <p class="text-muted" style="font-size: 0.95rem;">Host a game and share the code, or join with a code</p>
                 </div>
-                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: all var(--transition-base);">
+                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: background-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);">
                     <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(236, 72, 153, 0.3));">🤝</div>
                     <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">2. Wait for Opponent</h4>
                     <p class="text-muted" style="font-size: 0.95rem;">Both players must be ready to start</p>
                 </div>
-                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: all var(--transition-base);">
+                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: background-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);">
                     <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(16, 185, 129, 0.3));">📳</div>
                     <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">3. Shake to Play</h4>
                     <p class="text-muted" style="font-size: 0.95rem;">Shake your phone 3 times to make your choice</p>

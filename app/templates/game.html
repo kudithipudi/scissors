@@ -25,20 +25,20 @@
                 <!-- Host View: Show QR Code and Game Code -->
                 <div class="mb-2">
                     <p class="text-muted mb-1">Share this code with your friend:</p>
-                    <div class="game-code" x-text="gameCode"></div>
+                    <div class="game-code" x-text="gameCode" translate="no"></div>
                 </div>
 
                 {% if qr_code %}
                 <div class="qr-code mb-2">
                     <p class="text-muted mb-1">Or scan this QR code:</p>
-                    <img src="{{ qr_code }}" alt="QR Code" style="max-width: 300px;">
+                    <img src="{{ qr_code }}" alt="QR Code" width="370" height="370" loading="lazy" style="max-width: 300px;">
                 </div>
                 {% endif %}
 
                 {% if join_url %}
                 <div class="mb-2">
                     <p class="text-muted mb-1">Share link:</p>
-                    <div style="background: var(--color-bg); padding: var(--spacing-md); border-radius: var(--radius-md); word-break: break-all; font-size: 0.875rem;">
+                    <div style="background: var(--color-bg); padding: var(--spacing-md); border-radius: var(--radius-md); word-break: break-all; font-size: 0.875rem;" translate="no">
                         {{ join_url }}
                     </div>
                     <button @click="copyLink('{{ join_url }}')" class="btn btn-outline mt-1">
@@ -53,7 +53,7 @@
                 {% else %}
                 <!-- Guest View -->
                 <div class="mb-2">
-                    <div class="game-code" x-text="gameCode"></div>
+                    <div class="game-code" x-text="gameCode" translate="no"></div>
                     <p class="text-muted mt-2">Waiting for host to be ready...</p>
                     <div class="spinner"></div>
                 </div>
@@ -89,7 +89,7 @@
                     📳 Tap to Enable & Start
                 </button>
                 <p class="text-muted mt-2" style="font-size: 0.875rem;">
-                    When prompted, tap <strong>"Allow"</strong> to grant motion sensor access.
+                    When prompted, tap <strong>“Allow”</strong> to grant motion sensor access.
                 </p>
             </div>
 
@@ -156,13 +156,13 @@
                 <p class="text-muted mb-2" style="font-size: 1.15rem;">✨ Tap to select:</p>
 
                 <div class="choice-buttons">
-                    <button @click="selectManualChoice('rock')" class="choice-btn choice-rock" style="animation: fadeIn 0.3s ease-out;">
+                    <button @click="selectManualChoice('rock')" aria-label="Rock" class="choice-btn choice-rock" style="animation: fadeIn 0.3s ease-out;">
                         ✊
                     </button>
-                    <button @click="selectManualChoice('paper')" class="choice-btn choice-paper" style="animation: fadeIn 0.3s ease-out 0.1s; animation-fill-mode: both;">
+                    <button @click="selectManualChoice('paper')" aria-label="Paper" class="choice-btn choice-paper" style="animation: fadeIn 0.3s ease-out 0.1s; animation-fill-mode: both;">
                         ✋
                     </button>
-                    <button @click="selectManualChoice('scissors')" class="choice-btn choice-scissors" style="animation: fadeIn 0.3s ease-out 0.2s; animation-fill-mode: both;">
+                    <button @click="selectManualChoice('scissors')" aria-label="Scissors" class="choice-btn choice-scissors" style="animation: fadeIn 0.3s ease-out 0.2s; animation-fill-mode: both;">
                         ✌️
                     </button>
                 </div>
@@ -170,7 +170,7 @@
 
             <!-- Waiting for Opponent -->
             <div x-show="phase === 'waiting'" class="card-body">
-                <h2 class="mb-2">Waiting for opponent...</h2>
+                <h2 class="mb-2">Waiting for opponent…</h2>
                 <div class="mb-2">
                     <p class="text-muted">You chose: <span style="font-size: 2rem;" x-text="getChoiceEmoji(yourChoice)"></span></p>
                 </div>
@@ -182,12 +182,12 @@
                 <h2 class="mb-2" style="font-weight: 800;">Round <span x-text="currentRound" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></span> Results</h2>
 
                 <div class="grid grid-2 mb-2">
-                    <div class="card" :style="roundWinner === 'you' ? 'border: 3px solid var(--color-success); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), var(--shadow-lg); transform: scale(1.05);' : 'opacity: 0.7;'" style="transition: all var(--transition-base);">
+                    <div class="card" :style="roundWinner === 'you' ? 'border: 3px solid var(--color-success); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), var(--shadow-lg); transform: scale(1.05);' : 'opacity: 0.7;'" style="transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);">
                         <h3 style="font-weight: 700; margin-bottom: var(--spacing-md);">You</h3>
                         <div style="font-size: 5rem; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3)); animation: fadeIn 0.4s ease-out;" x-text="getChoiceEmoji(yourChoice)"></div>
                         <p style="text-transform: capitalize; font-weight: 600; font-size: 1.15rem; margin-top: var(--spacing-md);" x-text="yourChoice"></p>
                     </div>
-                    <div class="card" :style="roundWinner === 'opponent' ? 'border: 3px solid var(--color-success); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), var(--shadow-lg); transform: scale(1.05);' : 'opacity: 0.7;'" style="transition: all var(--transition-base);">
+                    <div class="card" :style="roundWinner === 'opponent' ? 'border: 3px solid var(--color-success); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), var(--shadow-lg); transform: scale(1.05);' : 'opacity: 0.7;'" style="transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);">
                         <h3 style="font-weight: 700; margin-bottom: var(--spacing-md);">Opponent</h3>
                         <div style="font-size: 5rem; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3)); animation: fadeIn 0.4s ease-out 0.1s; animation-fill-mode: both;" x-text="getChoiceEmoji(opponentChoice)"></div>
                         <p style="text-transform: capitalize; font-weight: 600; font-size: 1.15rem; margin-top: var(--spacing-md);" x-text="opponentChoice"></p>
@@ -197,11 +197,11 @@
                 <div class="winner-announcement" :style="roundWinner === 'you' ? 'color: var(--color-success);' : roundWinner === 'opponent' ? 'color: var(--color-danger);' : 'color: var(--color-warning);'">
                     <span x-show="roundWinner === 'you'">🎉 You Win!</span>
                     <span x-show="roundWinner === 'opponent'">😢 You Lose!</span>
-                    <span x-show="roundWinner === 'tie'">🤝 It's a Tie!</span>
+                    <span x-show="roundWinner === 'tie'">🤝 It’s a Tie!</span>
                 </div>
 
                 <p class="text-muted" style="font-size: 1.15rem; font-weight: 500;">
-                    <span x-show="!isGameOver">⏱️ Next round starting soon...</span>
+                    <span x-show="!isGameOver">⏱️ Next round starting soon…</span>
                     <span x-show="isGameOver" style="color: var(--color-primary-light);">🏁 Game complete!</span>
                 </p>
             </div>
@@ -219,7 +219,7 @@
                 <div class="winner-announcement" :style="gameWinner === 'you' ? 'color: var(--color-success);' : gameWinner === 'opponent' ? 'color: var(--color-danger);' : 'color: var(--color-warning);'" style="font-size: 3.5rem; margin: var(--spacing-xl) 0;">
                     <span x-show="gameWinner === 'you'">🏆 YOU WIN!</span>
                     <span x-show="gameWinner === 'opponent'">😢 YOU LOSE!</span>
-                    <span x-show="gameWinner === 'tie'">🤝 IT'S A TIE!</span>
+                    <span x-show="gameWinner === 'tie'">🤝 IT’S A TIE!</span>
                 </div>
 
                 <div class="score-board mb-2">
@@ -445,7 +445,7 @@
             },
 
             async waitForOpponent() {
-                // Poll every 500ms for opponent's choice
+                // Poll every 1.5s for opponent's choice
                 const pollOpponent = setInterval(async () => {
                     const state = await this.fetchGameState();
 
@@ -461,7 +461,7 @@
                             }
                         }
                     }
-                }, 500);
+                }, 1500);
             },
 
             updateScoresFromState(state) {
@@ -550,7 +550,7 @@
                             }
                         }
                     }
-                }, 2000);
+                }, 3000);
             },
 
             async cancelGame() {

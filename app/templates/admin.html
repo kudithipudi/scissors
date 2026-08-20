@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="adminDashboard()" x-init="init()">
+<div x-data="adminDashboard()" x-init="init()" @keydown.escape.window="closeModal()">
     <h1 class="mb-2">Admin Dashboard</h1>
 
     <!-- Statistics Cards -->
@@ -63,8 +63,8 @@
         <div class="card-body" style="border-bottom: 1px solid var(--color-bg-lighter);">
             <div class="grid grid-2">
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Status Filter</label>
-                    <select class="form-select" x-model="filter" @change="loadGames()">
+                    <label class="form-label" for="status-filter">Status Filter</label>
+                    <select id="status-filter" class="form-select" x-model="filter" @change="applyFilter()">
                         <option value="">All</option>
                         <option value="waiting">Waiting</option>
                         <option value="active">Active</option>
@@ -73,8 +73,8 @@
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Auto Refresh</label>
-                    <select class="form-select" x-model="refreshInterval" @change="updateRefreshInterval()">
+                    <label class="form-label" for="refresh-interval">Auto Refresh</label>
+                    <select id="refresh-interval" class="form-select" x-model="refreshInterval" @change="updateRefreshInterval()">
                         <option value="0">Off</option>
                         <option value="5000">5 seconds</option>
                         <option value="10000">10 seconds</option>
@@ -104,7 +104,7 @@
                 </thead>
                 <tbody>
                     <template x-for="game in games" :key="game.id">
-                        <tr style="border-bottom: 1px solid var(--color-bg-lighter);">
+                        <tr class="admin-table-row" style="border-bottom: 1px solid var(--color-bg-lighter);">
                             <td style="padding: var(--spacing-md); font-family: monospace; font-weight: 700;">
                                 <span x-text="game.game_code"></span>
                             </td>
@@ -126,7 +126,7 @@
                             </td>
                             <td style="padding: var(--spacing-md);">
                                 <button @click="viewGame(game)" class="btn btn-primary" style="padding: var(--spacing-sm) var(--spacing-md); font-size: 0.875rem;">
-                                    View
+                                    View Details
                                 </button>
                             </td>
                         </tr>
@@ -143,8 +143,13 @@
     <!-- Game Detail Modal -->
     <div
         x-show="selectedGame"
-        @click.self="selectedGame = null"
-        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: var(--spacing-md);"
+        x-ref="gameModal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Game Details"
+        @keydown="trapFocus($event)"
+        @click.self="closeModal()"
+        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: var(--spacing-md); overscroll-behavior: contain;"
         x-transition
     >
         <div
@@ -154,7 +159,7 @@
         >
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="margin-bottom: 0;">Game Details</h2>
-                <button @click="selectedGame = null" class="btn btn-danger" style="padding: var(--spacing-sm) var(--spacing-md);">
+                <button @click="closeModal()" aria-label="Close" class="btn btn-danger" style="padding: var(--spacing-sm) var(--spacing-md);">
                     ✕
                 </button>
             </div>
@@ -230,7 +235,8 @@
         stats: '{{ url_for("admin_stats") }}',
         games: '{{ url_for("admin_list_games") }}',
         gameDetail: '{{ url_for("admin_view_game", game_id="PLACEHOLDER") }}',
-        home: '{{ url_for("index") }}'
+        home: '{{ url_for("index") }}',
+        login: '{{ url_for("admin_login") }}'
     };
 </script>
 <script src="{{ url_for('static', path='js/admin.js') }}"></script>

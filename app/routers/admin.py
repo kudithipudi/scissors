@@ -2,31 +2,60 @@
 import secrets
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.config import settings
 from app.models import Game, Round, Statistics
 from app.templating import templates
 
 router = APIRouter()
-security = HTTPBasic()
 
 
-def require_admin(credentials: HTTPBasicCredentials = Depends(security)) -> bool:
-    """Require the admin password (username is ignored, matching prior behavior)."""
-    if not secrets.compare_digest(credentials.password, settings.ADMIN_PASSWORD):
-        raise HTTPException(
-            status_code=401,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": 'Basic realm="Admin Access Required"'},
-        )
+def _is_admin(request: Request) -> bool:
+    """Check the session for an authenticated admin."""
+    return bool(request.session.get("is_admin"))
+
+
+def require_admin(request: Request) -> bool:
+    """Require an authenticated admin session for protected actions."""
+    if not _is_admin(request):
+        raise HTTPException(status_code=401, detail="Unauthorized — log in at /admin/login")
     return True
 
 
+@router.get("/login", name="admin_login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Render the admin login form."""
+    if _is_admin(request):
+        return RedirectResponse("/admin", status_code=303)
+    return templates.TemplateResponse(request, "admin_login.html", {"error": False})
+
+
+@router.post("/login", name="admin_login_submit", response_class=HTMLResponse)
+async def login_submit(request: Request):
+    """Check the admin password and start a session."""
+    form = await request.form()
+    password = (form.get("password") or "").strip()
+    if secrets.compare_digest(password, settings.ADMIN_PASSWORD):
+        request.session["is_admin"] = True
+        return RedirectResponse("/admin", status_code=303)
+    return templates.TemplateResponse(
+        request, "admin_login.html", {"error": True}, status_code=401
+    )
+
+
+@router.post("/logout", name="admin_logout")
+async def logout(request: Request):
+    """Clear the admin session."""
+    request.session.clear()
+    return RedirectResponse("/admin/login", status_code=303)
+
+
 @router.get("/", name="admin_dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, _: bool = Depends(require_admin)):
+async def dashboard(request: Request):
     """Admin dashboard."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/login", status_code=303)
     return templates.TemplateResponse(request, "admin.html")
 
 

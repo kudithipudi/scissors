@@ -5,6 +5,8 @@
 
 /* ===== CSS Variables ===== */
 :root {
+    color-scheme: light;
+
     /* Colors - lab slate/indigo palette */
     --color-primary: #4f46e5;          /* indigo-600 */
     --color-primary-dark: #4338ca;     /* indigo-700 */
@@ -101,6 +103,7 @@ body {
     border-bottom: 1px solid var(--color-bg-lighter);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    padding-top: env(safe-area-inset-top, 0);
 }
 
 .app-header .app-header-inner {
@@ -186,6 +189,15 @@ body {
     gap: var(--spacing-md);
 }
 
+/* Keep focused/anchor targets from sliding under the sticky header */
+a[href],
+button,
+input,
+select,
+textarea {
+    scroll-margin-top: 4rem;
+}
+
 .lab-link {
     color: var(--color-text-muted);
     text-decoration: none;
@@ -194,6 +206,26 @@ body {
 
 .lab-link:hover {
     color: var(--color-text);
+}
+
+/* Skip to content link */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    z-index: 10000;
+    background: var(--color-bg-light);
+    color: var(--color-primary);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.skip-link:focus {
+    left: var(--spacing-md);
+    top: var(--spacing-md);
+    box-shadow: var(--shadow-lg);
 }
 
 .app-footer a {
@@ -210,6 +242,7 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
     line-height: 1.2;
     margin-bottom: var(--spacing-md);
+    text-wrap: balance;
 }
 
 h1 {
@@ -241,8 +274,14 @@ p {
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), filter var(--transition-fast);
     box-shadow: var(--shadow-sm);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active:not(:disabled) {
+    transform: scale(0.97);
 }
 
 .btn:disabled {
@@ -320,7 +359,7 @@ p {
     padding: var(--spacing-xl);
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--color-bg-lighter);
-    transition: all var(--transition-base);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);
     position: relative;
 }
 
@@ -374,14 +413,16 @@ p {
     background: var(--color-bg-light);
     color: var(--color-text);
     font-size: 1rem;
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .form-input::placeholder {
     color: var(--color-text-muted);
 }
 
-.form-input:focus {
+.form-input:focus-visible {
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgb(79 70 229 / 0.15);
@@ -401,10 +442,12 @@ p {
     color: var(--color-text);
     font-size: 1rem;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.form-select:focus {
+.form-select:focus-visible {
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgb(79 70 229 / 0.15);
@@ -417,7 +460,7 @@ p {
 /* ===== Toast Notifications ===== */
 #toast-container {
     position: fixed;
-    top: var(--spacing-xl);
+    top: calc(var(--spacing-xl) + env(safe-area-inset-top, 0));
     right: var(--spacing-xl);
     z-index: 9999;
     display: flex;
@@ -433,7 +476,7 @@ p {
     font-weight: 600;
     opacity: 0;
     transform: translateX(100%);
-    transition: all var(--transition-base);
+    transition: opacity var(--transition-base), transform var(--transition-base);
     max-width: 300px;
 }
 
@@ -523,10 +566,12 @@ p {
     border: 3px solid rgba(15, 23, 42, 0.08);
     font-size: 4rem;
     cursor: pointer;
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
     box-shadow: var(--shadow-lg);
     position: relative;
     overflow: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .choice-btn:hover:not(:disabled) {
@@ -635,7 +680,7 @@ p {
     flex: 1;
     padding: var(--spacing-md);
     border-radius: var(--radius-md);
-    transition: all var(--transition-base);
+    transition: background-color var(--transition-base);
 }
 
 .score-item:hover {
@@ -654,6 +699,7 @@ p {
 .score-value {
     font-size: 2.5rem;
     font-weight: 800;
+    font-variant-numeric: tabular-nums;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -675,7 +721,7 @@ p {
     text-align: center;
     border: 1px solid var(--color-bg-lighter);
     box-shadow: var(--shadow-sm);
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
     position: relative;
     overflow: hidden;
 }
@@ -689,6 +735,7 @@ p {
 .stat-value {
     font-size: 3rem;
     font-weight: 800;
+    font-variant-numeric: tabular-nums;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -794,7 +841,7 @@ p {
 .qr-code img {
     border: 1px solid rgb(79 70 229 / 0.3);
     box-shadow: var(--shadow-md);
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .qr-code img:hover {
@@ -806,4 +853,30 @@ p {
 /* ===== Admin tables ===== */
 table th {
     text-align: left;
+}
+
+/* Admin games table: skip off-screen rendering work */
+.admin-table-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 3.5rem;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+    .spinner,
+    .countdown,
+    .winner-announcement,
+    .hero .logo-icon,
+    .fade-in {
+        animation: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
