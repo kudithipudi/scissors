@@ -1,4 +1,5 @@
 """Gunicorn configuration for the Rock Paper Scissors FastAPI app."""
+import os  # noqa: E402
 
 # Server socket
 bind = 'unix:/var/www/scissors/scissors.sock'
@@ -19,11 +20,13 @@ max_requests_jitter = 50
 # generated URLs, e.g. the QR-code join link).
 forwarded_allow_ips = '*'
 
-# Logging (stdout/stderr -> journald via systemd; see `journalctl -u scissors`)
-accesslog = '-'
-errorlog = '-'
-loglevel = 'info'
-access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
+# Logging: local files under app/logs/ (access.log = per-request lines,
+# app.log = error/boot log + everything the app emits via `logging`).
+# Paths resolve relative to the systemd WorkingDirectory (/var/www/scissors).
+accesslog = 'app/logs/access.log'
+errorlog = 'app/logs/app.log'
+loglevel = os.environ.get('LOG_LEVEL', 'info')
+access_log_format = '%(t)s %(h)s "%(r)s" %(s)s %(b)s %(L)ss'
 
 # Process naming
 proc_name = 'scissors'

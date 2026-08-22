@@ -12,6 +12,13 @@ class TestIndexRoute:
         assert response.status_code == 200
         assert b'Rock Paper Scissors' in response.content
 
+    async def test_health(self, client):
+        """Health check: unauthenticated JSON, no DB dependency."""
+        response = await client.get('/health')
+        assert response.status_code == 200
+        assert response.headers['content-type'].startswith('application/json')
+        assert response.json() == {'status': 'ok'}
+
 
 class TestCreateGameRoute:
     """Test game creation route."""

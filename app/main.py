@@ -15,6 +15,10 @@ from app.routers import admin, api, game
 from app.templating import templates
 from app.utils.scheduler import start_scheduler, stop_scheduler
 
+logging.basicConfig(
+    level=settings.LOG_LEVEL.upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger("scissors")
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -67,6 +71,12 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(game.router, tags=["game"])
 app.include_router(api.router, prefix="/api", tags=["api"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+
+
+@app.get("/health")
+async def health():
+    """Liveness probe — unauthenticated, touches no DB or external API."""
+    return {"status": "ok"}
 
 
 @app.exception_handler(StarletteHTTPException)

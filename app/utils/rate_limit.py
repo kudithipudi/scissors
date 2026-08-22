@@ -9,7 +9,6 @@ from fastapi import Request
 from app.config import settings
 from app.db import check_and_record_rate_limit, get_connection
 
-WINDOW_SECONDS = 3600
 _ROUTE = "game_create"
 
 
@@ -38,7 +37,7 @@ async def is_rate_limited(request: Request) -> bool:
             ip=client_ip(request),
             route=_ROUTE,
             limit=settings.MAX_GAMES_PER_IP_PER_HOUR,
-            window_seconds=WINDOW_SECONDS,
+            window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
         )
     return not allowed
 

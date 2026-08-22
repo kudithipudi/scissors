@@ -36,9 +36,9 @@ ENV/
 *.swo
 *~
 
-# Logs
-logs/
-*.log
+# Logs (app/logs/ holds access.log + app.log at runtime; keep the dir via .gitkeep)
+app/logs/*
+!app/logs/.gitkeep
 
 # OS
 .DS_Store
@@ -66,16 +66,8 @@ instance/
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
 
-# AI assistant / local tooling config (not project code)
-CLAUDE.md
-claude.md
-AGENTS.md
-agents.md
-opencode.json
-opencode.jsonc
-.mcp.json
+# Local editor/tooling config
 .ignore
-.claude/
 .cursor/
 .cursorrules
 .windsurfrules

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # Game configuration
     GAME_TIMEOUT_MINUTES: int = 2
     MAX_GAMES_PER_IP_PER_HOUR: int = 10
+    RATE_LIMIT_WINDOW_SECONDS: int = 3600
     SHAKE_THRESHOLD: int = 15  # m/s^2
     REQUIRED_SHAKES: int = 3
     SHAKE_TIMEOUT_MS: int = 2000
@@ -35,6 +36,9 @@ class Settings(BaseSettings):
     # QR code configuration
     QR_BOX_SIZE: int = 10
     QR_BORDER: int = 4
+
+    # Logging
+    LOG_LEVEL: str = "info"
 
 
 settings = Settings()

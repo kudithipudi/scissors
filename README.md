@@ -12,7 +12,8 @@ best-of-1/3/5 match with live polling for game state.
 
 - **Backend**: FastAPI (async), served by Gunicorn + `uvicorn.workers.UvicornWorker`
 - **Database**: SQLite (`data/scissors.db`), accessed via `aiosqlite`, WAL mode
-- **Frontend**: Jinja2 templates, Alpine.js, custom CSS (no framework/Tailwind — kept its existing visual identity per the lab's UI standard for purposefully-styled apps)
+- **Frontend**: Jinja2 templates, Alpine.js (vendored at `app/static/js/alpine.min.js`, pinned 3.14.9), custom CSS
+- **Deviation from lab standard**: hand-rolled CSS instead of Tailwind — kept its existing visual identity per the lab's UI standard for purposefully-styled apps; migration to the standard Tailwind standalone-CLI setup is deferred
 - **Sessions**: Starlette `SessionMiddleware` (signed cookie, itsdangerous)
 - **Background jobs**: APScheduler (`AsyncIOScheduler`) — cleans up expired "waiting" games every minute
 - **QR codes**: `qrcode` + Pillow, generated on the fly (no external storage)
@@ -40,9 +41,10 @@ FastAPI + SQLite (see Migration notes below).
 │   │   └── qr_service.py       # QR code + join URL generation
 │   ├── utils/
 │   │   ├── helpers.py          # Game code gen, winner logic, formatting
-│   │   ├── rate_limit.py       # In-memory sliding-window rate limiter (game creation)
+│   │   ├── rate_limit.py       # SQLite sliding-window rate limiter (game creation)
 │   │   └── scheduler.py        # APScheduler setup (expired-game cleanup)
-│   ├── static/                 # css/, js/ (shake.js, admin.js), images/
+│   ├── static/                 # css/, js/ (shake.js, admin.js, alpine.min.js), images/
+│   ├── logs/                   # access.log + app.log at runtime (.gitkeep tracked)
 │   └── templates/              # base.html + page templates
 ├── data/                        # scissors.db (gitignored, www-data writable)
 ├── db/schema.sql                 # canonical SQLite schema (checked in)
@@ -81,30 +83,46 @@ flow against a real (throwaway) SQLite database per test.
 
 Runs under Gunicorn (`gunicorn.conf.py`, 1 `UvicornWorker`) bound to a unix
 socket, managed by systemd (`scissors.service`), reverse-proxied by nginx
-at `https://lab.kudithipudi.org/scissors/` (see `nginx_example.conf` for
-the actual block in use — nginx strips the `/scissors` prefix before
-proxying; `app/templating.py` puts it back for outgoing links).
+at `https://lab.kudithipudi.org/scissors/` (nginx strips the `/scissors`
+prefix before proxying; `app/templating.py` puts it back for outgoing links).
 
 ```bash
 sudo systemctl restart scissors
 sudo systemctl status scissors
 curl -s -o /dev/null -w '%{http_code}' https://lab.kudithipudi.org/scissors/   # -> 200
+curl -s https://lab.kudithipudi.org/scissors/health                            # -> {"status":"ok"}
 ```
 
-Logs: `journalctl -u scissors -f` (stdout/stderr, no file logging).
+## Logs
+
+Files under `app/logs/`, not journald:
+
+- `app/logs/access.log` — gunicorn access log (one line per HTTP request)
+- `app/logs/app.log` — gunicorn error/boot log plus app output via `logging`
+
+Set `LOG_LEVEL=debug` in `.env` to flip verbosity without code changes.
 
 ## Env vars
 
 | Var | Purpose | Default |
 |---|---|---|
-| `ROOT_PATH` | URL prefix this app is mounted under (used to build browser-facing links; nginx already strips it from incoming paths) | `""` |
+| `APP_NAME` | App display name (OpenAPI title) | `Rock Paper Scissors` |
+| `ROOT_PATH` | URL prefix this app is mounted under (used to build browser-facing links; nginx already strips it from incoming paths) | `/scissors` |
 | `DEBUG` | Debug flag | `false` |
 | `SECRET_KEY` | Session cookie signing key | dev placeholder — **set a real one in prod** |
 | `SESSION_COOKIE_SECURE` | Require HTTPS for the session cookie | `true` |
+| `SESSION_COOKIE_MAX_AGE` | Session cookie lifetime, seconds | `86400` (24 h) |
 | `DB_PATH` | Path to the SQLite database file | `data/scissors.db` |
 | `ADMIN_PASSWORD` | Password for `/admin/*` (HTTP Basic; any username accepted) | dev placeholder — **set a real one in prod** |
 | `GAME_TIMEOUT_MINUTES` | Minutes before an unjoined "waiting" game expires | `2` |
-| `MAX_GAMES_PER_IP_PER_HOUR` | Game-creation rate limit per client IP (sliding 1-hour window, honors `X-Forwarded-For`) | `10` |
+| `MAX_GAMES_PER_IP_PER_HOUR` | Game-creation rate limit per client IP (sliding window, honors `X-Forwarded-For`) | `10` |
+| `RATE_LIMIT_WINDOW_SECONDS` | Rate-limit sliding window length, seconds | `3600` |
+| `SHAKE_THRESHOLD` | Accelerometer magnitude (m/s²) counted as a shake | `15` |
+| `REQUIRED_SHAKES` | Shakes needed to lock in a choice | `3` |
+| `SHAKE_TIMEOUT_MS` | Window to complete the required shakes, ms | `2000` |
+| `QR_BOX_SIZE` | QR code box size (px per module) | `10` |
+| `QR_BORDER` | QR code border (modules) | `4` |
+| `LOG_LEVEL` | App + gunicorn log level (`debug`/`info`/...) | `info` |
 
 ## Game flow
 
@@ -119,8 +137,8 @@ that expired before a guest joined.
 ## Security & reliability
 
 - **Rate limiting** — game creation (`/game/create` and the "play again"
-  endpoint) is limited to `MAX_GAMES_PER_IP_PER_HOUR` games per IP per hour
-  (sliding window, in-memory; single-worker deployment). Returns `429`.
+  endpoint) is limited to `MAX_GAMES_PER_IP_PER_HOUR` games per IP per
+  `RATE_LIMIT_WINDOW_SECONDS` (sliding window, SQLite-backed). Returns `429`.
 - **Security headers** — every response carries `X-Content-Type-Options:
   nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
   strict-origin-when-cross-origin`, and a locked-down `Permissions-Policy`
