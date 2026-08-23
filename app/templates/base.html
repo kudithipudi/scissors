@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Play Rock Paper Scissors with friends - Real-time multiplayer with phone shake detection">
-    <meta name="theme-color" content="#f8fafc">
-    <link rel="icon" href="/favicon.ico">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8fafc">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='favicon.svg') }}">
     <title>{% block title %}Rock Paper Scissors{% endblock %}</title>
 
     <!-- CSS -->
@@ -31,6 +32,7 @@
                 </a>
                 <div class="header-right">
                     {% block header_actions %}{% endblock %}
+                    <button type="button" id="sound-toggle" class="icon-btn" aria-label="Toggle sound effects" aria-pressed="true" title="Sound on/off">&#128266;</button>
                     <a href="https://lab.kudithipudi.org" class="lab-link">&larr; lab.kudithipudi.org</a>
                 </div>
             </div>
@@ -85,6 +87,30 @@
         function handleSuccess(message) {
             showToast(message, 'success');
         }
+    </script>
+
+    <!-- Sound / confetti / haptics -->
+    <script src="{{ url_for('static', path='js/effects.js') }}"></script>
+    <script>
+        (function () {
+            const btn = document.getElementById('sound-toggle');
+            if (!btn) return;
+            const ICON_ON = '\u{1F50A}';
+            const ICON_OFF = '\u{1F507}';
+
+            function sync() {
+                const on = window.Effects && window.Effects.isEnabled();
+                btn.textContent = on ? ICON_ON : ICON_OFF;
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            }
+
+            btn.addEventListener('click', () => {
+                if (window.Effects) window.Effects.toggle();
+                sync();
+            });
+
+            sync();
+        })();
     </script>
 
     {% block scripts %}{% endblock %}

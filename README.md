@@ -128,8 +128,8 @@ Set `LOG_LEVEL=debug` in `.env` to flip verbosity without code changes.
 
 1. **Host creates a game** — picks best of 1/3/5, gets a game code + QR code, waits for a guest.
 2. **Guest joins** via QR code or game code — game becomes "active".
-3. **Gameplay** — both players shake (3x) or use manual rock/paper/scissors buttons; choices are revealed once both are in; round winner is computed server-side.
-4. **Game completion** — once one side reaches the required round wins, the game is marked "completed"; the host can start a new game with the same settings ("play again").
+3. **Gameplay** — both players pick a move: tap ✊/✋/✌️ (or keyboard `1/2/3`, `R/P/S` on desktop) for a deliberate choice, or shake the phone 3× to let fate pick at random. Choices are revealed once both are in; round winner is computed server-side.
+4. **Game completion** — once one side reaches the required round wins, the game is marked "completed"; the host can start a rematch with the same settings.
 
 Background cleanup (APScheduler, every minute) cancels "waiting" games
 that expired before a guest joined.
@@ -160,8 +160,20 @@ Unchanged from the original design — see `app/static/js/shake.js` and the
 `/device-test` / `/device-simple-test` diagnostic pages. iOS 13+ requires
 an explicit user-gesture-triggered permission prompt for
 `DeviceMotionEvent`; Android auto-grants. Desktop and denied/unsupported
-devices fall back to manual choice buttons, which also serve as an
-accessibility fallback.
+devices fall back to tap-to-choose buttons, which are always available as
+the deliberate way to play (and double as an accessibility fallback).
+
+## UX details
+
+- **Dark mode** — automatic via `prefers-color-scheme`; theme-color meta
+  follows the scheme.
+- **Sound & haptics** — tiny WebAudio-synthesized effects (no assets) plus
+  vibration where supported; toggleable from the header (🔊), persisted in
+  `localStorage`.
+- **Confetti** — canvas confetti celebrates a match win; all motion respects
+  `prefers-reduced-motion`.
+- **Resilience** — a "Reconnecting…" pill appears if state polling fails
+  repeatedly; the tab title tracks game status.
 
 ## Migration notes (Flask+Supabase -> FastAPI+SQLite)
 

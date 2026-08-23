@@ -4,18 +4,32 @@
 
 {% block content %}
 <div class="text-center" x-data="landingPage()">
-    <!-- Hero Section -->
+
+    <!-- Hero -->
     <div class="hero mb-3">
-        <h1 class="mb-2" style="font-size: 3.5rem;">
-            <span class="logo-icon" style="font-size: 5rem;">✊✋✌️</span>
-            <br>
+        <span class="hero-kicker">⚡ Real-time · Free · No signup</span>
+        <div class="rps-demo mt-2" aria-hidden="true" id="rps-demo">
+            <span>✊</span><span>✋</span><span>✌️</span>
+        </div>
+        <h1 class="mb-1" style="font-size: 3.5rem;">
             <span style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 Rock Paper Scissors
             </span>
         </h1>
-        <p class="text-muted" style="font-size: 1.35rem; margin-bottom: var(--spacing-2xl); max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.5;">
-            🎮 Real-time multiplayer • 📳 Shake to play • 🌐 Play anywhere
+        <p class="text-muted" style="font-size: 1.25rem; max-width: 560px; margin: 0 auto var(--spacing-lg); line-height: 1.5;">
+            Challenge a friend anywhere. Shake your phone, lock in your move, and settle it — best of 1, 3, or 5.
         </p>
+        <div class="feature-chips">
+            <span class="chip">📳 Shake to play</span>
+            <span class="chip">🔗 Share a code or QR</span>
+            <span class="chip">📱 Works on any phone</span>
+        </div>
+
+        <template x-if="lastGameCode">
+            <a :href="'/game/' + lastGameCode" class="rejoin-pill">
+                ↩︎ Rejoin your last game <strong x-text="lastGameCode"></strong>
+            </a>
+        </template>
     </div>
 
     <!-- Stats -->
@@ -35,21 +49,21 @@
         <!-- Host Game Card -->
         <div class="card">
             <div class="card-header">
-                <h2 style="margin-bottom: 0;">Host a Game</h2>
+                <h2 style="margin-bottom: 0;">🎮 Host a Game</h2>
+                <p class="text-muted" style="margin-bottom: 0; font-size: 0.925rem;">Create a room and share the code</p>
             </div>
             <div class="card-body">
-                <p class="text-muted">Create a new game and invite a friend</p>
                 <form @submit.prevent="hostGame">
                     <div class="form-group">
-                        <label class="form-label" for="game-mode">Game Mode</label>
-                        <select id="game-mode" class="form-select" x-model="bestOf" required>
-                            <option value="1">Best of 1</option>
-                            <option value="3" selected>Best of 3</option>
-                            <option value="5">Best of 5</option>
-                        </select>
+                        <label class="form-label" id="mode-label">Match length</label>
+                        <div class="segmented" role="group" aria-labelledby="mode-label">
+                            <button type="button" :aria-pressed="bestOf === 1" @click="bestOf = 1">Best of 1</button>
+                            <button type="button" :aria-pressed="bestOf === 3" @click="bestOf = 3">Best of 3</button>
+                            <button type="button" :aria-pressed="bestOf === 5" @click="bestOf = 5">Best of 5</button>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary btn-lg btn-block" :disabled="loading">
-                        <span x-show="!loading">🎮 Host Game</span>
+                        <span x-show="!loading">Create Game Room →</span>
                         <span x-show="loading">Creating…</span>
                     </button>
                 </form>
@@ -59,29 +73,32 @@
         <!-- Join Game Card -->
         <div class="card">
             <div class="card-header">
-                <h2 style="margin-bottom: 0;">Join a Game</h2>
+                <h2 style="margin-bottom: 0;">🎯 Join a Game</h2>
+                <p class="text-muted" style="margin-bottom: 0; font-size: 0.925rem;">Got a code? Drop it in — or scan the QR</p>
             </div>
             <div class="card-body">
-                <p class="text-muted">Enter the game code or scan QR code</p>
-                <form @submit.prevent="joinGame">
+                <form @submit.prevent="joinGame" novalidate>
                     <div class="form-group">
                         <label class="form-label" for="game-code">Game Code</label>
                         <input
                             id="game-code"
                             type="text"
                             name="game_code"
-                            class="form-input"
-                            x-model="gameCode"
-                            placeholder="Enter code (e.g. ABC123…)"
-                            maxlength="8"
-                            autocomplete="off"
+                            autocapitalize="characters"
+                            class="form-input join-input"
+                            x-model.trim="gameCode"
+                            @input="sanitizeCode()"
+                            placeholder="ABC123"
+                            maxlength="6"
                             spellcheck="false"
-                            required
-                            style="text-transform: uppercase; text-align: center; font-size: 1.5rem; font-family: monospace;"
+                            aria-describedby="code-hint"
+                            :class="{ 'code-invalid': codeError }"
                         >
+                        <p id="code-hint" class="field-hint" :class="{ 'field-error': codeError }" aria-live="polite"
+                           x-text="codeError || '6 characters — letters and numbers'"></p>
                     </div>
-                    <button type="submit" class="btn btn-secondary btn-lg btn-block" :disabled="loading">
-                        <span x-show="!loading">🎯 Join Game</span>
+                    <button type="submit" class="btn btn-secondary btn-lg btn-block" :class="{ 'btn-primary': gameCode.length === 6 }" :disabled="loading || gameCode.length === 0">
+                        <span x-show="!loading">Join Game</span>
                         <span x-show="loading">Joining…</span>
                     </button>
                 </form>
@@ -92,24 +109,24 @@
     <!-- How to Play -->
     <div class="card mt-3" style="max-width: 900px; margin: var(--spacing-2xl) auto 0;">
         <div class="card-header">
-            <h3 style="margin-bottom: 0; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">How to Play</h3>
+            <h3 style="margin-bottom: 0;">How to Play</h3>
         </div>
         <div class="card-body text-center">
             <div class="grid grid-3">
-                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: background-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);">
-                    <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(79, 70, 229, 0.3));">📱</div>
+                <div style="padding: var(--spacing-lg);">
+                    <div style="font-size: 3.5rem; margin-bottom: var(--spacing-md);">📱</div>
                     <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">1. Create or Join</h4>
-                    <p class="text-muted" style="font-size: 0.95rem;">Host a game and share the code, or join with a code</p>
+                    <p class="text-muted" style="font-size: 0.95rem;">Host a game and share the code, or join with a friend's code</p>
                 </div>
-                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: background-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);">
-                    <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(236, 72, 153, 0.3));">🤝</div>
-                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">2. Wait for Opponent</h4>
-                    <p class="text-muted" style="font-size: 0.95rem;">Both players must be ready to start</p>
+                <div style="padding: var(--spacing-lg);">
+                    <div style="font-size: 3.5rem; margin-bottom: var(--spacing-md);">🤝</div>
+                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">2. Wait for Your Opponent</h4>
+                    <p class="text-muted" style="font-size: 0.95rem;">They scan the QR or type the code — the match starts instantly</p>
                 </div>
-                <div style="padding: var(--spacing-lg); border-radius: var(--radius-lg); transition: background-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);">
-                    <div style="font-size: 4rem; margin-bottom: var(--spacing-md); filter: drop-shadow(0 4px 8px rgba(16, 185, 129, 0.3));">📳</div>
-                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">3. Shake to Play</h4>
-                    <p class="text-muted" style="font-size: 0.95rem;">Shake your phone 3 times to make your choice</p>
+                <div style="padding: var(--spacing-lg);">
+                    <div style="font-size: 3.5rem; margin-bottom: var(--spacing-md);">📳</div>
+                    <h4 style="font-weight: 700; margin-bottom: var(--spacing-sm);">3. Shake — or Tap</h4>
+                    <p class="text-muted" style="font-size: 0.95rem;">Shake 3 times for a surprise move, or tap ✊ ✋ ✌️ to pick your own</p>
                 </div>
             </div>
         </div>
@@ -117,25 +134,49 @@
 </div>
 
 <script>
-    // Get base path from current location
-    const getBasePath = () => {
-        const path = window.location.pathname;
-        const base = path.substring(0, path.lastIndexOf('/') + 1);
-        return base.endsWith('/') ? base.slice(0, -1) : base;
-    };
-
     function landingPage() {
         return {
             bestOf: 3,
             gameCode: '',
+            codeError: '',
             loading: false,
             activeGames: 0,
             totalGames: 0,
+            lastGameCode: null,
 
-            async init() {
-                await this.loadStats();
-                // Refresh stats every 10 seconds
+            init() {
+                this.loadStats();
                 setInterval(() => this.loadStats(), 10000);
+
+                try {
+                    this.lastGameCode = localStorage.getItem('rps-last-game');
+                } catch (e) { /* storage unavailable */ }
+
+                this.startDemo();
+            },
+
+            // Loop the hero demo hands
+            startDemo() {
+                const spans = document.querySelectorAll('#rps-demo span');
+                if (!spans.length) return;
+                const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                if (reduced) {
+                    spans.forEach(s => s.classList.add('is-live'));
+                    return;
+                }
+                let i = 0;
+                spans[0].classList.add('is-live');
+                setInterval(() => {
+                    spans[i].classList.remove('is-live');
+                    i = (i + 1) % spans.length;
+                    spans[i].classList.add('is-live');
+                }, 900);
+            },
+
+            sanitizeCode() {
+                const cleaned = this.gameCode.toUpperCase().replace(/[^A-Z2-9]/g, '').replace(/[OI1]/g, '');
+                if (cleaned !== this.gameCode) this.gameCode = cleaned;
+                this.codeError = '';
             },
 
             async loadStats() {
@@ -156,17 +197,14 @@
                 try {
                     const response = await fetch('{{ url_for("create_game") }}', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            best_of: parseInt(this.bestOf)
-                        })
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ best_of: parseInt(this.bestOf) })
                     });
 
                     const data = await response.json();
 
                     if (response.ok) {
+                        try { localStorage.setItem('rps-last-game', data.game_code); } catch (e) {}
                         window.location.href = '{{ url_for("view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', data.game_code);
                     } else {
                         handleError(data.error || 'Failed to create game');
@@ -179,21 +217,22 @@
             },
 
             async joinGame() {
-                if (!this.gameCode) {
-                    handleError('Please enter a game code');
+                const code = (this.gameCode || '').toUpperCase().trim();
+                if (!code) {
+                    this.codeError = 'Please enter a game code';
+                    return;
+                }
+                if (code.length !== 6) {
+                    this.codeError = 'Codes are exactly 6 characters';
                     return;
                 }
 
                 this.loading = true;
-                const code = this.gameCode.toUpperCase().trim();
-
                 try {
-                    // Navigate to game page
+                    try { localStorage.setItem('rps-last-game', code); } catch (e) {}
                     window.location.href = '{{ url_for("view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', code);
-                } catch (error) {
-                    handleError('Invalid game code');
                 } finally {
-                    this.loading = false;
+                    setTimeout(() => { this.loading = false; }, 2000);
                 }
             }
         }

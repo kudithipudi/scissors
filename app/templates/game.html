@@ -4,255 +4,315 @@
 
 {% block extra_head %}
 <script src="{{ url_for('static', path='js/shake.js') }}?v=2.1"></script>
+<style>
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .waiting-dots::after {
+        content: '';
+        animation: dots 1.4s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+        0% { content: ''; }
+        25% { content: '.'; }
+        50% { content: '..'; }
+        75% { content: '...'; }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div x-data="gameState()" x-init="init()" class="fade-in">
-    <!-- Waiting Room -->
+<div x-data="gameState()" class="fade-in">
+
+    <!-- ================= Waiting Room ================= -->
     <div x-show="gameStatus === 'waiting'" class="text-center">
-        <div class="card" style="max-width: 650px; margin: 0 auto; animation: fadeIn 0.5s ease-out;">
-            <div class="card-header" style="background: var(--gradient-dark);">
-                <h2 style="font-weight: 800; font-size: 2rem;">
-                    <span style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                        Waiting for {% if player_role == 'host' %}Guest{% else %}Host{% endif %}
-                    </span>
-                    <span style="font-size: 1.5rem; margin-left: var(--spacing-sm);">⏳</span>
+        <div class="card" style="max-width: 650px; margin: 0 auto;">
+            <div class="card-header" style="border-bottom: none;">
+                <h2 style="font-weight: 800; font-size: 1.75rem;">
+                    {% if player_role == 'host' %}
+                        Waiting for your opponent<span class="waiting-dots"></span> ⏳
+                    {% else %}
+                        Joining room<span class="waiting-dots"></span> ⏳
+                    {% endif %}
                 </h2>
+                <p class="text-muted" style="margin-bottom: 0;">
+                    {% if player_role == 'host' %}Share the code below — the match starts the moment they arrive.{% else %}You're in. Waiting for the host to get ready.{% endif %}
+                </p>
             </div>
 
             <div class="card-body">
                 {% if player_role == 'host' %}
-                <!-- Host View: Show QR Code and Game Code -->
-                <div class="mb-2">
-                    <p class="text-muted mb-1">Share this code with your friend:</p>
-                    <div class="game-code" x-text="gameCode" translate="no"></div>
-                </div>
+                <!-- Host View -->
+                <button type="button" class="game-code" style="cursor: pointer; border: none; width: 100%;"
+                        translate="no"
+                        aria-label="Game code — tap to copy"
+                        @click="copyText(gameCode, 'Code copied!')"
+                        x-text="gameCode"></button>
+                <p class="text-muted field-hint">Tap the code to copy it</p>
 
                 {% if qr_code %}
                 <div class="qr-code mb-2">
-                    <p class="text-muted mb-1">Or scan this QR code:</p>
-                    <img src="{{ qr_code }}" alt="QR Code" width="370" height="370" loading="lazy" style="max-width: 300px;">
+                    <img src="{{ qr_code }}" alt="QR code linking to this game" width="370" height="370" loading="lazy" style="max-width: 240px;">
                 </div>
                 {% endif %}
 
-                {% if join_url %}
-                <div class="mb-2">
-                    <p class="text-muted mb-1">Share link:</p>
-                    <div style="background: var(--color-bg); padding: var(--spacing-md); border-radius: var(--radius-md); word-break: break-all; font-size: 0.875rem;" translate="no">
-                        {{ join_url }}
-                    </div>
-                    <button @click="copyLink('{{ join_url }}')" class="btn btn-outline mt-1">
-                        📋 Copy Link
+                <div class="grid grid-2 mt-2" style="gap: var(--spacing-sm); max-width: 420px; margin-left: auto; margin-right: auto;">
+                    <button @click="shareGame()" class="btn btn-primary btn-lg">
+                        🔗 Share Invite
                     </button>
-                </div>
-                {% endif %}
-
-                <div class="mt-2">
-                    <button @click="cancelGame()" class="btn btn-danger">Cancel Game</button>
+                    <button @click="showCancelModal = true" class="btn btn-outline btn-lg" style="color: var(--color-danger);">
+                        Cancel Game
+                    </button>
                 </div>
                 {% else %}
                 <!-- Guest View -->
-                <div class="mb-2">
-                    <div class="game-code" x-text="gameCode" translate="no"></div>
-                    <p class="text-muted mt-2">Waiting for host to be ready...</p>
-                    <div class="spinner"></div>
-                </div>
+                <div class="game-code" x-text="gameCode" translate="no"></div>
+                <div class="spinner"></div>
+                <p class="text-muted">Waiting for host<span class="waiting-dots"></span></p>
+                <a href="{{ url_for('index') }}" class="btn btn-outline mt-1">← Leave</a>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Active Game -->
+    <!-- ================= Active Game ================= -->
     <div x-show="gameStatus === 'active'" class="text-center">
-        <!-- Score Board -->
-        <div class="score-board mb-2">
+
+        <!-- Scoreboard -->
+        <div class="score-board mb-1" style="padding: var(--spacing-lg);">
             <div class="score-item">
                 <div class="score-label">You</div>
-                <div class="score-value" x-text="yourWins"></div>
+                <div class="score-value" :class="{ 'score-bump': bumpYou }" x-text="yourWins"></div>
             </div>
             <div class="score-item">
-                <div class="score-label">Round</div>
-                <div class="score-value" x-text="currentRound + ' / ' + totalRounds"></div>
+                <div class="score-label">Best of {{ game.best_of }}</div>
+                <div class="score-value" x-text="currentRound + '/' + totalRounds"></div>
             </div>
             <div class="score-item">
                 <div class="score-label">Opponent</div>
-                <div class="score-value" x-text="opponentWins"></div>
+                <div class="score-value" :class="{ 'score-bump': bumpOpponent }" x-text="opponentWins"></div>
+            </div>
+        </div>
+
+        <div class="mb-2" aria-hidden="true">
+            <div class="pips">
+                <template x-for="i in winsNeeded" :key="'you-' + i">
+                    <span class="pip" :class="pipClass(i, yourWins)"></span>
+                </template>
+                <span style="width: 14px;"></span>
+                <template x-for="i in winsNeeded" :key="'opp-' + i">
+                    <span class="pip" :class="pipClass(i, opponentWins, true)"></span>
+                </template>
             </div>
         </div>
 
         <div class="card" style="max-width: 600px; margin: 0 auto;">
-            <!-- Permission Request (shown on mobile before first round) -->
+
+            <!-- Permission -->
             <div x-show="phase === 'permission'" class="card-body">
-                <h2 class="mb-2" style="font-weight: 800;">Enable Shake Detection</h2>
-                <p class="text-muted mb-2" style="font-size: 1.15rem;">This game uses your phone's motion sensors to detect shakes.</p>
-                <button @click="requestMotionPermission()" class="btn btn-primary btn-lg" style="font-size: 1.25rem; padding: var(--spacing-lg) var(--spacing-xl);">
-                    📳 Tap to Enable & Start
+                <div style="font-size: 4rem;" aria-hidden="true">📳</div>
+                <h2 class="mb-1" style="font-weight: 800;">Enable Shake Detection</h2>
+                <p class="text-muted mb-2">Play the real way — physically shake your phone to throw your move.</p>
+                <button @click="requestMotionPermission()" class="btn btn-primary btn-lg" style="font-size: 1.15rem;">
+                    Enable Shaking &amp; Start
                 </button>
-                <p class="text-muted mt-2" style="font-size: 0.875rem;">
-                    When prompted, tap <strong>“Allow”</strong> to grant motion sensor access.
-                </p>
+                <div class="mt-2">
+                    <button @click="motionSkipped = true; startCountdown()" class="btn btn-outline">No thanks — I'll tap my move</button>
+                </div>
+                <p class="text-muted mt-2" style="font-size: 0.8125rem;">Motion access is only used to detect shakes. Nothing is recorded.</p>
             </div>
 
             <!-- Countdown -->
             <div x-show="phase === 'countdown'" class="card-body">
-                <div class="countdown" x-text="countdownValue"></div>
-                <p class="text-muted" style="font-size: 1.5rem;">Get ready to shake!</p>
+                <div class="countdown" style="font-size: 6rem;" x-text="countdownEmoji" aria-hidden="true"></div>
+                <div class="countdown-word" x-text="countdownWord" aria-live="assertive"></div>
             </div>
 
-            <!-- Shaking Phase -->
-            <div x-show="phase === 'shaking' && !shakeError" class="card-body">
-                <h2 class="mb-2" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; font-size: 2.5rem;">SHAKE YOUR PHONE!</h2>
+            <!-- Your move -->
+            <div x-show="phase === 'shaking'" class="card-body">
+                <h2 class="shake-title mb-1" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; font-size: 2rem;">
+                    MAKE YOUR MOVE!
+                </h2>
 
-                <div class="progress-ring">
-                    <svg width="220" height="220">
-                        <circle
-                            class="progress-ring-circle"
-                            stroke="var(--color-bg-lighter)"
-                            stroke-width="16"
-                            fill="transparent"
-                            r="95"
-                            cx="110"
-                            cy="110"
-                        />
-                        <circle
-                            class="progress-ring-circle"
-                            stroke="url(#gradient)"
-                            stroke-width="16"
-                            fill="transparent"
-                            r="95"
-                            cx="110"
-                            cy="110"
-                            :stroke-dasharray="596.9"
-                            :stroke-dashoffset="596.9 - (shakeCount / 3 * 596.9)"
-                            style="transition: stroke-dashoffset 0.3s ease-out; filter: drop-shadow(0 0 8px rgba(79, 70, 229, 0.6));"
-                        />
+                <!-- Shake meter (mobile) -->
+                <div x-show="!shakeError" class="progress-ring">
+                    <svg width="220" height="220" aria-hidden="true">
+                        <circle class="progress-ring-circle" stroke="var(--color-bg-lighter)" stroke-width="16" fill="transparent" r="95" cx="110" cy="110"></circle>
+                        <circle class="progress-ring-circle" stroke="url(#gradient)" stroke-width="16" fill="transparent" r="95" cx="110" cy="110"
+                                stroke-linecap="round"
+                                :stroke-dasharray="596.9"
+                                :stroke-dashoffset="596.9 - (shakeCount / 3 * 596.9)"
+                                style="transition: stroke-dashoffset 0.25s ease-out; filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));"></circle>
                         <defs>
                             <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#818cf8;stop-opacity:1" />
+                                <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1"></stop>
+                                <stop offset="100%" style="stop-color:#a5b4fc;stop-opacity:1"></stop>
                             </linearGradient>
                         </defs>
                     </svg>
-                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; font-weight: 900; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                        <span x-text="shakeCount"></span>/3
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem;" aria-hidden="true">
+                        <span x-text="shakeEmoji"></span>
+                    </div>
+                    <div style="position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-weight: 700; color: var(--color-text-muted); font-size: 0.875rem;">
+                        <span x-text="shakeCount"></span>/3 shakes
                     </div>
                 </div>
 
-                <p class="text-muted mt-2" style="font-size: 1.15rem; font-weight: 500;">
-                    <span x-show="shakeCount === 0">📳 Shake your phone to make a choice</span>
-                    <span x-show="shakeCount > 0 && shakeCount < 3" style="color: var(--color-primary-light);">🔥 Keep shaking...</span>
-                    <span x-show="shakeCount === 3" style="color: var(--color-success); font-weight: 700;">✓ Choice locked in!</span>
+                <p class="text-muted" style="font-size: 0.95rem;">
+                    <span x-show="shakeCount < 3">📳 Shake 3 times for a surprise move… or pick deliberately:</span>
+                </p>
+
+                <!-- Tap to choose (always available) -->
+                <div class="choice-row mt-2" role="group" aria-label="Choose your move">
+                    <button @click="lockChoice('rock', false)" class="choice-pick choice-rock" aria-label="Choose rock">
+                        ✊<small>Rock</small>
+                    </button>
+                    <button @click="lockChoice('paper', false)" class="choice-pick choice-paper" aria-label="Choose paper">
+                        ✋<small>Paper</small>
+                    </button>
+                    <button @click="lockChoice('scissors', false)" class="choice-pick choice-scissors" aria-label="Choose scissors">
+                        ✌️<small>Scissors</small>
+                    </button>
+                </div>
+                <p class="text-muted field-hint">
+                    <span class="kbd">1</span> <span class="kbd">2</span> <span class="kbd">3</span> or <span class="kbd">R</span> <span class="kbd">P</span> <span class="kbd">S</span> work too
                 </p>
             </div>
 
-            <!-- Manual Choice (Fallback) -->
-            <div x-show="phase === 'shaking' && shakeError" class="card-body">
-                <div class="mb-2" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; padding: var(--spacing-lg); border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
-                    <h3 style="margin: 0 0 var(--spacing-sm) 0; font-weight: 700;">⚠️ Motion Sensors Unavailable</h3>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.95;" x-text="shakeErrorMessage"></p>
-                </div>
-
-                <h2 class="mb-2" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900;">Choose Your Move</h2>
-                <p class="text-muted mb-2" style="font-size: 1.15rem;">✨ Tap to select:</p>
-
-                <div class="choice-buttons">
-                    <button @click="selectManualChoice('rock')" aria-label="Rock" class="choice-btn choice-rock" style="animation: fadeIn 0.3s ease-out;">
-                        ✊
-                    </button>
-                    <button @click="selectManualChoice('paper')" aria-label="Paper" class="choice-btn choice-paper" style="animation: fadeIn 0.3s ease-out 0.1s; animation-fill-mode: both;">
-                        ✋
-                    </button>
-                    <button @click="selectManualChoice('scissors')" aria-label="Scissors" class="choice-btn choice-scissors" style="animation: fadeIn 0.3s ease-out 0.2s; animation-fill-mode: both;">
-                        ✌️
-                    </button>
-                </div>
-            </div>
-
-            <!-- Waiting for Opponent -->
+            <!-- Waiting for opponent -->
             <div x-show="phase === 'waiting'" class="card-body">
-                <h2 class="mb-2">Waiting for opponent…</h2>
-                <div class="mb-2">
-                    <p class="text-muted">You chose: <span style="font-size: 2rem;" x-text="getChoiceEmoji(yourChoice)"></span></p>
-                </div>
-                <div class="spinner"></div>
+                <h2 class="mb-1" style="font-weight: 800;">Locked in!</h2>
+                <div class="locked-choice" aria-hidden="true" x-text="getChoiceEmoji(yourChoice)"></div>
+                <p class="text-muted" style="font-size: 1.1rem; font-weight: 600;">Waiting for your opponent<span class="waiting-dots"></span></p>
             </div>
 
-            <!-- Reveal Phase -->
+            <!-- Reveal -->
             <div x-show="phase === 'reveal'" class="card-body">
-                <h2 class="mb-2" style="font-weight: 800;">Round <span x-text="currentRound" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></span> Results</h2>
+                <h2 class="mb-1" style="font-weight: 800;">Round <span x-text="currentRound"></span></h2>
 
-                <div class="grid grid-2 mb-2">
-                    <div class="card" :style="roundWinner === 'you' ? 'border: 3px solid var(--color-success); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), var(--shadow-lg); transform: scale(1.05);' : 'opacity: 0.7;'" style="transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);">
-                        <h3 style="font-weight: 700; margin-bottom: var(--spacing-md);">You</h3>
-                        <div style="font-size: 5rem; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3)); animation: fadeIn 0.4s ease-out;" x-text="getChoiceEmoji(yourChoice)"></div>
-                        <p style="text-transform: capitalize; font-weight: 600; font-size: 1.15rem; margin-top: var(--spacing-md);" x-text="yourChoice"></p>
+                <div class="reveal-stage" :class="{ 'is-pumping': revealStage === 'pumping' }">
+                    <div>
+                        <div class="reveal-hand hand-left"
+                             :class="revealHandClass('you')"
+                             x-text="revealEmoji('you')"></div>
+                        <p class="choice-name" x-text="revealStage === 'flipped' ? prettyName(yourChoice) : ''"></p>
                     </div>
-                    <div class="card" :style="roundWinner === 'opponent' ? 'border: 3px solid var(--color-success); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), var(--shadow-lg); transform: scale(1.05);' : 'opacity: 0.7;'" style="transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);">
-                        <h3 style="font-weight: 700; margin-bottom: var(--spacing-md);">Opponent</h3>
-                        <div style="font-size: 5rem; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3)); animation: fadeIn 0.4s ease-out 0.1s; animation-fill-mode: both;" x-text="getChoiceEmoji(opponentChoice)"></div>
-                        <p style="text-transform: capitalize; font-weight: 600; font-size: 1.15rem; margin-top: var(--spacing-md);" x-text="opponentChoice"></p>
+                    <span class="reveal-vs">VS</span>
+                    <div>
+                        <div class="reveal-hand hand-right"
+                             :class="revealHandClass('opponent')"
+                             x-text="revealEmoji('opponent')"></div>
+                        <p class="choice-name" x-text="revealStage === 'flipped' ? prettyName(opponentChoice) : ''"></p>
                     </div>
                 </div>
 
-                <div class="winner-announcement" :style="roundWinner === 'you' ? 'color: var(--color-success);' : roundWinner === 'opponent' ? 'color: var(--color-danger);' : 'color: var(--color-warning);'">
-                    <span x-show="roundWinner === 'you'">🎉 You Win!</span>
-                    <span x-show="roundWinner === 'opponent'">😢 You Lose!</span>
-                    <span x-show="roundWinner === 'tie'">🤝 It’s a Tie!</span>
-                </div>
-
-                <p class="text-muted" style="font-size: 1.15rem; font-weight: 500;">
-                    <span x-show="!isGameOver">⏱️ Next round starting soon…</span>
-                    <span x-show="isGameOver" style="color: var(--color-primary-light);">🏁 Game complete!</span>
-                </p>
+                <template x-if="revealStage === 'flipped'">
+                    <div class="winner-announcement" style="font-size: 2.5rem; margin: var(--spacing-lg) 0;"
+                         :style="roundWinner === 'you' ? 'color: var(--color-success);' : roundWinner === 'opponent' ? 'color: var(--color-danger);' : 'color: var(--color-warning);'"
+                         x-text="roundResultText"></div>
+                </template>
             </div>
         </div>
     </div>
 
-    <!-- Game Complete -->
+    <!-- ================= Game Complete ================= -->
     <div x-show="gameStatus === 'completed'" class="text-center">
-        <div class="card" style="max-width: 650px; margin: 0 auto; animation: fadeIn 0.5s ease-out;">
-            <div class="card-header" style="background: var(--gradient-dark); border-bottom: 2px solid rgba(79, 70, 229, 0.3);">
-                <h2 style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; font-size: 2.5rem;">Game Over!</h2>
-            </div>
-
-            <div class="card-body">
-                <div class="winner-announcement" :style="gameWinner === 'you' ? 'color: var(--color-success);' : gameWinner === 'opponent' ? 'color: var(--color-danger);' : 'color: var(--color-warning);'" style="font-size: 3.5rem; margin: var(--spacing-xl) 0;">
-                    <span x-show="gameWinner === 'you'">🏆 YOU WIN!</span>
-                    <span x-show="gameWinner === 'opponent'">😢 YOU LOSE!</span>
-                    <span x-show="gameWinner === 'tie'">🤝 IT’S A TIE!</span>
-                </div>
-
-                <div class="score-board mb-2">
-                    <div class="score-item">
-                        <div class="score-label">Your Wins</div>
-                        <div class="score-value" x-text="yourWins"></div>
+        <div class="card" style="max-width: 650px; margin: 0 auto;">
+            <div class="card-body" style="margin-bottom: 0;">
+                <template x-if="gameWinner === 'you'">
+                    <div>
+                        <div class="trophy" aria-hidden="true">🏆</div>
+                        <div class="winner-announcement" style="color: var(--color-success); font-size: 3rem;">VICTORY!</div>
+                        <p class="result-stats-line">You crushed it <span x-text="yourWins"></span>–<span x-text="opponentWins"></span>. Champion behavior.</p>
                     </div>
-                    <div class="score-item">
-                        <div class="score-label">Opponent Wins</div>
-                        <div class="score-value" x-text="opponentWins"></div>
+                </template>
+                <template x-if="gameWinner === 'opponent'">
+                    <div>
+                        <div style="font-size: 5rem; line-height: 1;" aria-hidden="true">🫡</div>
+                        <div class="winner-announcement" style="color: var(--color-danger); font-size: 3rem;">DEFEAT</div>
+                        <p class="result-stats-line">Final score <span x-text="yourWins"></span>–<span x-text="opponentWins"></span>. Rematch?</p>
+                    </div>
+                </template>
+                <template x-if="gameWinner === 'tie'">
+                    <div>
+                        <div style="font-size: 5rem; line-height: 1;" aria-hidden="true">🤝</div>
+                        <div class="winner-announcement" style="color: var(--color-warning); font-size: 3rem;">IT'S A TIE!</div>
+                        <p class="result-stats-line">Perfectly balanced. Run it back?</p>
+                    </div>
+                </template>
+
+                <div class="mt-2 mb-2" aria-hidden="true">
+                    <div class="pips">
+                        <template x-for="i in winsNeeded" :key="'fyou-' + i">
+                            <span class="pip" :class="i <= yourWins ? 'win-you' : ''"></span>
+                        </template>
+                        <span style="width: 14px;"></span>
+                        <template x-for="i in winsNeeded" :key="'fopp-' + i">
+                            <span class="pip" :class="i <= opponentWins ? 'win-opponent' : ''"></span>
+                        </template>
                     </div>
                 </div>
 
                 <div class="grid grid-2 mt-2" style="gap: var(--spacing-md);">
                     <a href="{{ url_for('index') }}" class="btn btn-outline btn-lg">🏠 Home</a>
                     {% if player_role == 'host' %}
-                    <button @click="playAgain()" class="btn btn-primary btn-lg">🔄 Play Again</button>
+                    <button @click="playAgain()" class="btn btn-primary btn-lg" :disabled="loading">🔄 Rematch</button>
+                    {% else %}
+                    <span class="btn btn-outline btn-lg" style="cursor: default;" aria-hidden="true">⏸ Host can rematch</span>
                     {% endif %}
                 </div>
+                {% if player_role != 'host' %}
+                <p class="text-muted field-hint">Ask the host to hit rematch — you'll get the invite.</p>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Cancelled Game -->
+    <!-- ================= Cancelled ================= -->
     <div x-show="gameStatus === 'cancelled'" class="text-center">
         <div class="card" style="max-width: 600px; margin: 0 auto;">
-            <div class="card-body">
+            <div class="card-body" style="margin-bottom: 0;">
+                <div style="font-size: 4rem;" aria-hidden="true">🚪</div>
                 <h2>Game Cancelled</h2>
-                <p class="text-muted">This game has been cancelled.</p>
-                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-2">Go Home</a>
+                <p class="text-muted">This room has closed. Start a fresh one?</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-1">New Game</a>
             </div>
         </div>
     </div>
+
+    <!-- ================= Cancel confirmation modal ================= -->
+    <div class="modal-overlay" x-show="showCancelModal" x-cloak
+         @click.self="showCancelModal = false"
+         @keydown.escape.window="showCancelModal = false"
+         role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+        <div class="modal-card"
+             x-effect="if (showCancelModal) $nextTick(() => $refs.cancelYes.focus())">
+            <h3 id="cancel-title">Cancel this game?</h3>
+            <p class="text-muted" style="margin-bottom: 0;">Your opponent will be sent back to the lobby.</p>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @click="showCancelModal = false">Keep waiting</button>
+                <button class="btn btn-danger" x-ref="cancelYes" :disabled="loading" @click="confirmCancel()">Cancel game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection status pill -->
+    <div class="conn-pill" x-show="connectionLost" x-cloak role="alert">
+        <span class="conn-dot"></span> Reconnecting…
+    </div>
+
+    <!-- Screen-reader announcements -->
+    <div class="sr-only" role="status" aria-live="assertive" x-text="announcement"></div>
 </div>
 
 <script>
@@ -260,8 +320,8 @@
     const PLAYER_ROLE = '{{ player_role }}';
     const INITIAL_GAME_DATA = {{ game | tojson }};
     const BEST_OF = {{ game.best_of }};
+    const WINS_NEEDED = Math.ceil({{ game.best_of }} / 2);
 
-    // API URLs
     const API_URLS = {
         shake: '{{ url_for("api_record_shake", game_code=game.game_code) }}',
         choice: '{{ url_for("api_submit_choice", game_code=game.game_code) }}',
@@ -274,252 +334,316 @@
 
     function gameState() {
         return {
-            // Game state
+            /* ---------- state ---------- */
             gameCode: GAME_CODE,
             gameStatus: INITIAL_GAME_DATA.status,
             playerRole: PLAYER_ROLE,
             totalRounds: BEST_OF,
+            winsNeeded: WINS_NEEDED,
 
-            // Phase management
-            phase: 'countdown', // permission, countdown, shaking, waiting, reveal
-            countdownValue: 3,
+            phase: 'idle',
+            revealStage: '',
+            countdownWord: '',
+            countdownEmoji: '',
 
-            // Shake detection
             shakeCount: 0,
             shakeDetector: null,
             shakeError: false,
-            shakeErrorMessage: '',
-            motionPermissionGranted: false,
+            motionSkipped: false,
+            motionGranted: false,
+
             yourChoice: null,
             opponentChoice: null,
+            choiceLocked: false,
 
-            // Round tracking
             currentRound: 1,
             roundWinner: null,
+            roundResultText: '',
             yourWins: 0,
             opponentWins: 0,
+            bumpYou: false,
+            bumpOpponent: false,
             isGameOver: false,
             gameWinner: null,
 
-            // Polling
+            showCancelModal: false,
+            connectionLost: false,
+            failCount: 0,
+            loading: false,
+            announcement: '',
+
             pollInterval: null,
+            opponentPoll: null,
+            timeouts: [],
+            keyHandler: null,
 
+            /* ---------- lifecycle ---------- */
             init() {
-                // Start polling for game state
                 this.startPolling();
+                this.updateTitle();
 
-                // If game is active, begin round flow
                 if (this.gameStatus === 'active') {
                     this.beginRound();
                 }
+
+                this.keyHandler = (e) => {
+                    if (this.gameStatus !== 'active' || this.phase !== 'shaking' || this.choiceLocked) return;
+                    const map = { '1': 'rock', '2': 'paper', '3': 'scissors', r: 'rock', p: 'paper', s: 'scissors' };
+                    const choice = map[e.key.toLowerCase()];
+                    if (choice) {
+                        e.preventDefault();
+                        this.lockChoice(choice, false);
+                    }
+                };
+                window.addEventListener('keydown', this.keyHandler);
             },
 
+            destroy() {
+                window.removeEventListener('keydown', this.keyHandler);
+                [this.pollInterval, this.opponentPoll].forEach(id => id && clearInterval(id));
+                this.timeouts.forEach(clearTimeout);
+                if (this.shakeDetector) this.shakeDetector.stop();
+            },
+
+            later(fn, ms) {
+                const id = setTimeout(() => {
+                    if (this.gameStatus === 'cancelled') return;
+                    fn();
+                }, ms);
+                this.timeouts.push(id);
+                return id;
+            },
+
+            /* ---------- round flow ---------- */
             beginRound() {
-                // On mobile, request motion permission from user gesture before first round
-                const isMobile = DeviceCapabilities.isMobile();
-                const needsPerm = DeviceCapabilities.needsPermission();
+                this.choiceLocked = false;
+                this.shakeCount = 0;
+                this.shakeError = false;
+                this.yourChoice = null;
+                this.opponentChoice = null;
+                this.roundWinner = null;
+                this.roundResultText = '';
+                this.revealStage = '';
 
-                if (isMobile && !this.motionPermissionGranted && (needsPerm || DeviceCapabilities.hasMotionSensors())) {
+                // Show the shake-permission explainer once per session (before round 1)
+                const showGate = !this.motionSkipped &&
+                                 !this.motionGranted &&
+                                 DeviceCapabilities.isMobile() &&
+                                 (DeviceCapabilities.needsPermission() || DeviceCapabilities.hasMotionSensors());
+                if (showGate) {
                     this.phase = 'permission';
-                } else {
-                    this.startCountdown();
+                    return;
                 }
-            },
-
-            async requestMotionPermission() {
-                // Called from button click (user gesture) — required for iOS/Android
-                if (DeviceCapabilities.needsPermission()) {
-                    const granted = await DeviceCapabilities.requestPermission();
-                    this.motionPermissionGranted = granted;
-                } else {
-                    this.motionPermissionGranted = true;
-                }
-                // Proceed to countdown regardless — shake detection will fall back to manual if needed
                 this.startCountdown();
             },
 
-            async startCountdown() {
-                this.phase = 'countdown';
-                this.countdownValue = 3;
-
-                const countdown = setInterval(() => {
-                    this.countdownValue--;
-                    if (this.countdownValue === 0) {
-                        clearInterval(countdown);
-                        this.phase = 'shaking';
-                        this.startShakeDetection();
+            async requestMotionPermission() {
+                if (DeviceCapabilities.needsPermission()) {
+                    const granted = await DeviceCapabilities.requestPermission();
+                    if (granted) {
+                        this.motionGranted = true;
+                    } else {
+                        this.motionSkipped = true; // fall back to tapping
                     }
-                }, 1000);
+                } else {
+                    this.motionGranted = true;
+                }
+                this.startCountdown();
             },
 
-            async startShakeDetection() {
-                this.shakeCount = 0;
-                this.yourChoice = null;
-                this.shakeError = false;
-                this.shakeErrorMessage = '';
+            startCountdown() {
+                this.phase = 'countdown';
+                const seq = [
+                    { emoji: '✊', word: 'Rock' },
+                    { emoji: '✋', word: 'Paper' },
+                    { emoji: '✌️', word: 'Scissors' },
+                    { emoji: '🎯', word: 'Shoot!' },
+                ];
+                let i = 0;
+                const beat = () => {
+                    this.countdownEmoji = seq[i].emoji;
+                    this.countdownWord = seq[i].word;
+                    Effects.play(i === seq.length - 1 ? 'shoot' : 'tick');
+                    i++;
+                    if (i < seq.length) {
+                        this.later(beat, 750);
+                    } else {
+                        this.later(() => {
+                            if (this.gameStatus !== 'active') return;
+                            this.phase = 'shaking';
+                            this.startShakeDetection();
+                        }, 500);
+                    }
+                };
+                beat();
+            },
 
-                // Initialize shake detector with error callback
+            startShakeDetection() {
+                this.shakeCount = 0;
+
                 this.shakeDetector = new ShakeDetector(
                     (count) => {
                         this.shakeCount = count;
+                        Effects.play('tick');
+                        Effects.buzz(30);
                         this.recordShake(count);
 
-                        if (count === 3) {
-                            // Generate random choice
-                            const choices = ['rock', 'paper', 'scissors'];
-                            this.yourChoice = choices[Math.floor(Math.random() * 3)];
-
-                            // Submit choice
-                            this.submitChoice();
-
-                            // Stop shake detection
+                        if (count >= 3) {
                             this.shakeDetector.stop();
-
-                            // Move to waiting phase
-                            this.phase = 'waiting';
+                            const choices = ['rock', 'paper', 'scissors'];
+                            const fate = choices[Math.floor(Math.random() * 3)];
+                            showToast(`Fate chose ${fate.charAt(0).toUpperCase() + fate.slice(1)} ${this.getChoiceEmoji(fate)}`, 'info');
+                            this.lockChoice(fate, true);
                         }
                     },
-                    (errors) => {
-                        // Handle shake detection errors
-                        console.error('Shake detection failed:', errors);
+                    () => {
+                        // Sensors unavailable — the tap buttons are always visible, so just note it
                         this.shakeError = true;
-                        this.shakeErrorMessage = errors.join('. ');
-
-                        // Show fallback manual choice
-                        handleError('Motion sensors not available. Please select your choice manually.');
                     }
                 );
 
-                const started = await this.shakeDetector.start();
-                if (!started) {
-                    console.log('Shake detection failed to start, showing manual choice');
-                }
+                this.shakeDetector.start().then((started) => {
+                    if (!started) this.shakeError = true;
+                }).catch(() => { this.shakeError = true; });
             },
 
-            selectManualChoice(choice) {
-                // Set choice from manual selection
+            lockChoice(choice, fromShake) {
+                if (this.choiceLocked || this.gameStatus !== 'active') return;
+                this.choiceLocked = true;
                 this.yourChoice = choice;
-
-                // Visual feedback
-                handleSuccess(`You chose ${choice}!`);
-
-                // Submit choice
+                Effects.play(fromShake ? 'lock' : 'lock');
+                Effects.buzz([40, 40, 90]);
                 this.submitChoice();
-
-                // Move to waiting phase
                 this.phase = 'waiting';
             },
 
+            selectManualChoice(choice) {
+                this.lockChoice(choice, false);
+            },
+
+            /* ---------- server comms ---------- */
             async recordShake(count) {
                 try {
                     await fetch(API_URLS.shake, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ shake_count: count })
                     });
-                } catch (error) {
-                    console.error('Failed to record shake:', error);
-                }
+                } catch (error) { /* analytics only */ }
             },
 
             async submitChoice() {
                 try {
                     const response = await fetch(API_URLS.choice, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ choice: this.yourChoice })
                     });
-
                     if (response.ok) {
-                        // Poll for opponent's choice
                         this.waitForOpponent();
+                    } else {
+                        this.choiceLocked = false;
+                        handleError('Could not submit your move — try again');
+                        this.phase = 'shaking';
                     }
                 } catch (error) {
-                    console.error('Failed to submit choice:', error);
-                    handleError('Failed to submit choice');
+                    this.choiceLocked = false;
+                    handleError('Network error — try again');
+                    this.phase = 'shaking';
                 }
             },
 
-            async waitForOpponent() {
-                // Poll every 1.5s for opponent's choice
-                const pollOpponent = setInterval(async () => {
+            waitForOpponent() {
+                if (this.opponentPoll) clearInterval(this.opponentPoll);
+                this.opponentPoll = setInterval(async () => {
                     const state = await this.fetchGameState();
+                    if (!state || !state.rounds) return;
 
-                    if (state && state.rounds && state.rounds.length > 0) {
-                        // Find the round that matches our current round number
-                        const currentRoundData = state.rounds.find(r => r.round_number === this.currentRound);
-
-                        if (currentRoundData) {
-                            // Check if round is complete
-                            if (currentRoundData.host_choice && currentRoundData.guest_choice) {
-                                clearInterval(pollOpponent);
-                                this.showRoundResult(currentRoundData, state);
-                            }
-                        }
+                    const round = state.rounds.find(r => r.round_number === this.currentRound);
+                    if (round && round.host_choice && round.guest_choice) {
+                        clearInterval(this.opponentPoll);
+                        this.opponentPoll = null;
+                        this.showRoundResult(round, state);
                     }
-                }, 1500);
+                }, 1200);
+            },
+
+            showRoundResult(round, state) {
+                this.opponentChoice = this.playerRole === 'host' ? round.guest_choice : round.host_choice;
+
+                if (round.winner === this.playerRole) this.roundWinner = 'you';
+                else if (round.winner === 'tie') this.roundWinner = 'tie';
+                else this.roundWinner = 'opponent';
+
+                this.roundResultText =
+                    this.roundWinner === 'you' ? '🎉 You win the round!' :
+                    this.roundWinner === 'opponent' ? '😬 Opponent takes it' : '🤝 It\'s a draw';
+
+                const prevYou = this.yourWins;
+                const prevOpp = this.opponentWins;
+                this.updateScoresFromState(state);
+
+                // Dramatic reveal: pump… pump… shoot!
+                this.phase = 'reveal';
+                this.revealStage = 'pumping';
+                Effects.play('reveal');
+
+                const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                this.later(() => {
+                    this.revealStage = 'flipped';
+
+                    if (prevYou !== this.yourWins) { this.bumpYou = true; setTimeout(() => this.bumpYou = false, 600); }
+                    if (prevOpp !== this.opponentWins) { this.bumpOpponent = true; setTimeout(() => this.bumpOpponent = false, 600); }
+
+                    if (this.roundWinner === 'you') { Effects.play('win'); Effects.buzz([60, 50, 120]); }
+                    else if (this.roundWinner === 'opponent') { Effects.play('lose'); }
+                    else { Effects.play('tie'); }
+
+                    this.announce(this.roundResultText +
+                        '. Score: you ' + this.yourWins + ', opponent ' + this.opponentWins);
+
+                    if (state.game.status === 'completed') {
+                        this.isGameOver = true;
+                        this.later(() => this.completeGame(state), 1600);
+                    } else {
+                        this.later(() => {
+                            if (this.gameStatus !== 'active') return;
+                            this.currentRound++;
+                            this.updateTitle();
+                            this.beginRound();
+                        }, 2400);
+                    }
+                }, reduced ? 150 : 1350);
+            },
+
+            completeGame(state) {
+                if (state.game.winner === this.playerRole) this.gameWinner = 'you';
+                else if (state.game.winner === 'tie') this.gameWinner = 'tie';
+                else this.gameWinner = 'opponent';
+
+                this.gameStatus = 'completed';
+                this.updateTitle();
+
+                if (this.gameWinner === 'you') {
+                    Effects.celebrate();
+                } else if (this.gameWinner === 'tie') {
+                    Effects.play('tie');
+                } else {
+                    Effects.play('lose');
+                }
+                this.announce(this.gameWinner === 'you' ? 'You win the game!' :
+                              this.gameWinner === 'tie' ? 'The game is a tie.' : 'You lost the game.');
             },
 
             updateScoresFromState(state) {
-                // Calculate scores from server state to stay in sync
-                const myRole = this.playerRole;
-                const opponentRole = myRole === 'host' ? 'guest' : 'host';
+                const opponentRole = this.playerRole === 'host' ? 'guest' : 'host';
                 this.yourWins = 0;
                 this.opponentWins = 0;
                 if (state.rounds) {
                     for (const r of state.rounds) {
-                        if (r.winner === myRole) this.yourWins++;
+                        if (r.winner === this.playerRole) this.yourWins++;
                         else if (r.winner === opponentRole) this.opponentWins++;
                     }
-                }
-            },
-
-            showRoundResult(round, state) {
-                // Set opponent choice
-                if (this.playerRole === 'host') {
-                    this.opponentChoice = round.guest_choice;
-                } else {
-                    this.opponentChoice = round.host_choice;
-                }
-
-                // Determine round winner for display
-                if (round.winner === this.playerRole) {
-                    this.roundWinner = 'you';
-                } else if (round.winner === 'tie') {
-                    this.roundWinner = 'tie';
-                } else {
-                    this.roundWinner = 'opponent';
-                }
-
-                // Calculate scores from server state
-                this.updateScoresFromState(state);
-
-                // Show reveal
-                this.phase = 'reveal';
-
-                // Check if game is over
-                if (state.game.status === 'completed') {
-                    this.isGameOver = true;
-                    this.gameStatus = 'completed';
-
-                    // Determine game winner
-                    if (state.game.winner === this.playerRole) {
-                        this.gameWinner = 'you';
-                    } else if (state.game.winner === 'tie') {
-                        this.gameWinner = 'tie';
-                    } else {
-                        this.gameWinner = 'opponent';
-                    }
-                } else {
-                    // Start next round after 3 seconds
-                    setTimeout(() => {
-                        this.currentRound++;
-                        this.beginRound();
-                    }, 3000);
                 }
             },
 
@@ -527,10 +651,14 @@
                 try {
                     const response = await fetch(API_URLS.state);
                     if (response.ok) {
+                        this.failCount = 0;
+                        this.connectionLost = false;
                         return await response.json();
                     }
+                    throw new Error('HTTP ' + response.status);
                 } catch (error) {
-                    console.error('Failed to fetch game state:', error);
+                    this.failCount++;
+                    if (this.failCount >= 3) this.connectionLost = true;
                 }
                 return null;
             },
@@ -538,31 +666,27 @@
             startPolling() {
                 this.pollInterval = setInterval(async () => {
                     const state = await this.fetchGameState();
+                    if (!state) return;
 
-                    if (state) {
-                        // Update game status
-                        if (state.game.status !== this.gameStatus) {
-                            this.gameStatus = state.game.status;
+                    if (state.game.status !== this.gameStatus) {
+                        const prev = this.gameStatus;
+                        this.gameStatus = state.game.status;
+                        this.updateTitle();
 
-                            // If game just became active, begin round flow
-                            if (this.gameStatus === 'active') {
-                                this.beginRound();
-                            }
+                        if (prev === 'waiting' && this.gameStatus === 'active') {
+                            Effects.play('join');
+                            showToast('Opponent joined — good luck!', 'success');
+                            this.beginRound();
                         }
                     }
-                }, 3000);
+                }, 2000);
             },
 
-            async cancelGame() {
-                if (!confirm('Are you sure you want to cancel this game?')) {
-                    return;
-                }
-
+            /* ---------- actions ---------- */
+            async confirmCancel() {
+                this.loading = true;
                 try {
-                    const response = await fetch(API_URLS.cancel, {
-                        method: 'POST'
-                    });
-
+                    const response = await fetch(API_URLS.cancel, { method: 'POST' });
                     if (response.ok) {
                         window.location.href = API_URLS.home;
                     } else {
@@ -570,40 +694,118 @@
                     }
                 } catch (error) {
                     handleError('Network error');
+                } finally {
+                    this.loading = false;
+                    this.showCancelModal = false;
                 }
             },
 
             async playAgain() {
+                this.loading = true;
                 try {
-                    const response = await fetch(API_URLS.playAgain, {
-                        method: 'POST'
-                    });
-
+                    const response = await fetch(API_URLS.playAgain, { method: 'POST' });
                     if (response.ok) {
                         const data = await response.json();
+                        try { localStorage.setItem('rps-last-game', data.game_code); } catch (e) {}
                         window.location.href = API_URLS.gameView.replace('PLACEHOLDER', data.game_code);
                     } else {
                         handleError('Failed to create new game');
                     }
                 } catch (error) {
                     handleError('Network error');
+                } finally {
+                    this.loading = false;
                 }
             },
 
+            async shareGame() {
+                const url = API_URLS.gameView.replace('PLACEHOLDER', this.gameCode);
+                const absolute = new URL(url, window.location.origin).href;
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: 'Rock Paper Scissors',
+                            text: `Beat me if you can — join my game with code ${this.gameCode}`,
+                            url: absolute
+                        });
+                        return;
+                    } catch (e) { /* dismissed — fall through */ }
+                }
+                this.copyLink(absolute);
+            },
+
             copyLink(url) {
-                navigator.clipboard.writeText(url).then(() => {
-                    handleSuccess('Link copied to clipboard!');
-                }).catch(() => {
-                    handleError('Failed to copy link');
-                });
+                this.copyText(url, 'Link copied to clipboard!');
+            },
+
+            copyText(text, message) {
+                const done = () => handleSuccess(message);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(done).catch(() => this.fallbackCopy(text, done));
+                } else {
+                    this.fallbackCopy(text, done);
+                }
+            },
+
+            fallbackCopy(text, done) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    done();
+                } catch (e) {
+                    handleError('Copy failed — please copy manually');
+                }
+                ta.remove();
+            },
+
+            /* ---------- display helpers ---------- */
+            updateTitle() {
+                const base = 'RPS ' + this.gameCode;
+                if (this.gameStatus === 'waiting') document.title = '⏳ ' + base;
+                else if (this.gameStatus === 'active') document.title = '▶ R' + this.currentRound + ' · ' + base;
+                else if (this.gameStatus === 'completed') document.title = '🏁 ' + base;
+                else document.title = base;
+            },
+
+            announce(msg) {
+                this.announcement = '';
+                requestAnimationFrame(() => { this.announcement = msg; });
+            },
+
+            pipClass(index, wins, isOpponent) {
+                if (index <= wins) return isOpponent ? 'win-opponent' : 'win-you';
+                if (index === wins + 1 && this.gameStatus === 'active' && this.phase !== 'reveal') return 'pip-current';
+                return '';
+            },
+
+            revealEmoji(side) {
+                if (this.revealStage === 'pumping') return '✊';
+                return side === 'you' ? this.getChoiceEmoji(this.yourChoice) : this.getChoiceEmoji(this.opponentChoice);
+            },
+
+            revealHandClass(side) {
+                if (this.revealStage !== 'flipped') return '';
+                if (this.roundWinner === 'tie') return 'hand-tie';
+                const sideWon = (side === 'you' && this.roundWinner === 'you') ||
+                                (side === 'opponent' && this.roundWinner === 'opponent');
+                return sideWon ? 'hand-winner' : 'hand-loser';
+            },
+
+            prettyName(choice) {
+                return choice ? choice.charAt(0).toUpperCase() + choice.slice(1) : '';
+            },
+
+            get shakeEmoji() {
+                return ['👋', '📳', '🔥'][Math.min(this.shakeCount, 2)];
             },
 
             getChoiceEmoji(choice) {
-                const emojis = {
-                    'rock': '✊',
-                    'paper': '✋',
-                    'scissors': '✌️'
-                };
+                const emojis = { rock: '✊', paper: '✋', scissors: '✌️' };
                 return emojis[choice] || '❓';
             }
         }

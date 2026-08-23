@@ -106,9 +106,9 @@ class TestShakeDetectionEndpoint:
         response = await client.get('/game/ABC123')
 
         assert response.status_code == 200
-        # Check for manual choice buttons
+        # Check for manual choice buttons (always available, not just on sensor error)
         assert b'selectManualChoice' in response.content
-        assert b'Motion Sensors Unavailable' in response.content
+        assert b'lockChoice' in response.content
 
 
 class TestJavaScriptDeviceDetection:
