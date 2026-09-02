@@ -25,6 +25,9 @@ forwarded_allow_ips = '*'
 # Paths resolve relative to the systemd WorkingDirectory (/var/www/scissors).
 accesslog = 'app/logs/access.log'
 errorlog = 'app/logs/app.log'
+# The app logs via logging.basicConfig -> stderr; without this, those lines
+# (incl. the per-call "LLM ..." timing) land in journald instead of app.log.
+capture_output = True
 loglevel = os.environ.get('LOG_LEVEL', 'info')
 access_log_format = '%(t)s %(h)s "%(r)s" %(s)s %(b)s %(L)ss'
 
