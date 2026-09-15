@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse
 
 from app.config import settings
 from app.db import init_db
-from app.routers import admin, api, game
+from app.routers import admin, api, game, ws
 from app.templating import templates
 from app.utils.scheduler import start_scheduler, stop_scheduler
 
@@ -71,6 +71,8 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(game.router, tags=["game"])
 app.include_router(api.router, prefix="/api", tags=["api"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+# No prefix: the final path is /ws/game/{code} (nginx proxies /scissors/ws/...).
+app.include_router(ws.router, tags=["ws"])
 
 
 @app.get("/health")

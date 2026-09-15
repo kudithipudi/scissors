@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.config import settings
 from app.services.game_service import GameService
 from app.services.qr_service import QRService
 from app.models import Game
@@ -115,6 +116,11 @@ async def view_game(request: Request, game_code: str):
             "player_role": player_role,
             "qr_code": qr_code,
             "join_url": join_url,
+            # Shake tuning lives in .env — hand it to the client so changing
+            # it actually changes client-side detection.
+            "shake_threshold": settings.SHAKE_THRESHOLD,
+            "shake_timeout_ms": settings.SHAKE_TIMEOUT_MS,
+            "required_shakes": settings.REQUIRED_SHAKES,
         },
     )
 

@@ -3,7 +3,8 @@
 {% block title %}Game {{ game.game_code }}{% endblock %}
 
 {% block extra_head %}
-<script src="{{ url_for('static', path='js/shake.js') }}?v=2.1"></script>
+<script src="{{ url_for('static', path='js/shake.js') }}?v=2.2"></script>
+<script src="{{ url_for('static', path='js/share-card.js') }}?v=1.0"></script>
 <style>
     .sr-only {
         position: absolute;
@@ -98,9 +99,14 @@
                 <div class="score-label">Best of {{ game.best_of }}</div>
                 <div class="score-value" x-text="currentRound + '/' + totalRounds"></div>
             </div>
-            <div class="score-item">
+            <div class="score-item reaction-anchor">
                 <div class="score-label">Opponent</div>
                 <div class="score-value" :class="{ 'score-bump': bumpOpponent }" x-text="opponentWins"></div>
+                <div class="reaction-float-layer" aria-hidden="true">
+                    <template x-for="r in floatingReactions" :key="r.id">
+                        <span class="reaction-float" x-text="r.emoji"></span>
+                    </template>
+                </div>
             </div>
         </div>
 
@@ -145,13 +151,13 @@
                 </h2>
 
                 <!-- Shake meter (mobile) -->
-                <div x-show="!shakeError" class="progress-ring">
+                <div x-show="!shakeError" class="progress-ring" :class="'shake-tier-' + Math.min(shakeCount, requiredShakes)">
                     <svg width="220" height="220" aria-hidden="true">
                         <circle class="progress-ring-circle" stroke="var(--color-bg-lighter)" stroke-width="16" fill="transparent" r="95" cx="110" cy="110"></circle>
                         <circle class="progress-ring-circle" stroke="url(#gradient)" stroke-width="16" fill="transparent" r="95" cx="110" cy="110"
                                 stroke-linecap="round"
                                 :stroke-dasharray="596.9"
-                                :stroke-dashoffset="596.9 - (shakeCount / 3 * 596.9)"
+                                :stroke-dashoffset="596.9 - (Math.min(shakeCount, requiredShakes) / requiredShakes * 596.9)"
                                 style="transition: stroke-dashoffset 0.25s ease-out; filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));"></circle>
                         <defs>
                             <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -164,12 +170,12 @@
                         <span x-text="shakeEmoji"></span>
                     </div>
                     <div style="position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-weight: 700; color: var(--color-text-muted); font-size: 0.875rem;">
-                        <span x-text="shakeCount"></span>/3 shakes
+                        <span x-text="shakeCount"></span>/<span x-text="requiredShakes"></span> shakes
                     </div>
                 </div>
 
                 <p class="text-muted" style="font-size: 0.95rem;">
-                    <span x-show="shakeCount < 3">📳 Shake 3 times for a surprise move… or pick deliberately:</span>
+                    <span x-show="shakeCount < requiredShakes">📳 Shake <span x-text="requiredShakes"></span> times for a surprise move… or pick deliberately:</span>
                 </p>
 
                 <!-- Tap to choose (always available) -->
@@ -223,6 +229,19 @@
                 </template>
             </div>
         </div>
+
+        <!-- Emoji reactions (live channel only; hidden during the reveal) -->
+        <div class="reaction-bar"
+             x-show="wsConnected && (phase === 'countdown' || phase === 'shaking' || phase === 'waiting')"
+             x-cloak
+             role="group" aria-label="Send a reaction to your opponent">
+            <template x-for="emoji in reactionChoices" :key="emoji">
+                <button type="button" class="reaction-btn"
+                        :aria-label="'Send reaction ' + emoji"
+                        @click="sendReaction(emoji)"
+                        x-text="emoji"></button>
+            </template>
+        </div>
     </div>
 
     <!-- ================= Game Complete ================= -->
@@ -243,13 +262,14 @@
                         <p class="result-stats-line">Final score <span x-text="yourWins"></span>–<span x-text="opponentWins"></span>. Rematch?</p>
                     </div>
                 </template>
-                <template x-if="gameWinner === 'tie'">
-                    <div>
-                        <div style="font-size: 5rem; line-height: 1;" aria-hidden="true">🤝</div>
-                        <div class="winner-announcement" style="color: var(--color-warning); font-size: 3rem;">IT'S A TIE!</div>
-                        <p class="result-stats-line">Perfectly balanced. Run it back?</p>
-                    </div>
-                </template>
+                <!-- No tie branch: calculate_game_winner() only ever returns
+                     'host' or 'guest' (or None while the game is unfinished),
+                     so a *game* can never end tied. Rounds can. -->
+
+                <p class="streak-line" x-show="stats.gamesPlayed > 0" x-cloak
+                   x-text="stats.currentStreak >= 2
+                       ? ('🔥 ' + stats.currentStreak + '-game win streak')
+                       : ('Record: ' + stats.wins + 'W–' + stats.losses + 'L')"></p>
 
                 <div class="mt-2 mb-2" aria-hidden="true">
                     <div class="pips">
@@ -271,6 +291,11 @@
                     <span class="btn btn-outline btn-lg" style="cursor: default;" aria-hidden="true">⏸ Host can rematch</span>
                     {% endif %}
                 </div>
+                <div class="mt-2">
+                    <button @click="shareResult()" class="btn btn-outline" :disabled="sharing">🖼️ Share Result</button>
+                </div>
+                <canvas x-ref="shareCanvas" width="600" height="800" hidden aria-hidden="true"></canvas>
+
                 {% if player_role != 'host' %}
                 <p class="text-muted field-hint">Ask the host to hit rematch — you'll get the invite.</p>
                 {% endif %}
@@ -322,15 +347,32 @@
     const BEST_OF = {{ game.best_of }};
     const WINS_NEEDED = Math.ceil({{ game.best_of }} / 2);
 
+    // Server-side shake tuning (.env: SHAKE_THRESHOLD / SHAKE_TIMEOUT_MS /
+    // REQUIRED_SHAKES). Previously hardcoded in shake.js, so config changes
+    // had no client-side effect.
+    const SHAKE_CONFIG = {
+        threshold: {{ shake_threshold }},
+        timeoutMs: {{ shake_timeout_ms }},
+        requiredShakes: {{ required_shakes }}
+    };
+
     const API_URLS = {
         shake: '{{ url_for("api_record_shake", game_code=game.game_code) }}',
         choice: '{{ url_for("api_submit_choice", game_code=game.game_code) }}',
         state: '{{ url_for("api_game_state", game_code=game.game_code) }}',
+        react: '{{ url_for("api_react", game_code=game.game_code) }}',
         cancel: '{{ url_for("cancel_game", game_code=game.game_code) }}',
         playAgain: '{{ url_for("api_play_again", game_code=game.game_code) }}',
         home: '{{ url_for("index") }}',
         gameView: '{{ url_for("view_game", game_code="PLACEHOLDER") }}'
     };
+
+    // Built server-side so ROOT_PATH handling stays in app/templating.py — the
+    // scheme/host are re-derived from the current page below.
+    const WS_URL = '{{ url_for("game_ws", game_code=game.game_code) }}';
+
+    const STATS_KEY = 'rps-stats';
+    const EMPTY_STATS = { wins: 0, losses: 0, gamesPlayed: 0, currentStreak: 0, bestStreak: 0 };
 
     function gameState() {
         return {
@@ -346,6 +388,7 @@
             countdownWord: '',
             countdownEmoji: '',
 
+            requiredShakes: SHAKE_CONFIG.requiredShakes,
             shakeCount: 0,
             shakeDetector: null,
             shakeError: false,
@@ -370,16 +413,36 @@
             connectionLost: false,
             failCount: 0,
             loading: false,
+            sharing: false,
             announcement: '',
+
+            // Live channel (an optimization on top of polling, never a
+            // replacement — polling below keeps running regardless).
+            ws: null,
+            wsConnected: false,
+            wsBackoff: 1000,
+            wsReconnectTimer: null,
+
+            reactionChoices: ['😤', '😂', '👀', '🔥', '😱', '🤝'],
+            floatingReactions: [],
+            reactionSeq: 0,
+
+            stats: Object.assign({}, EMPTY_STATS),
+            finalRounds: [],
 
             pollInterval: null,
             opponentPoll: null,
+            awaitingOpponent: false,
+            fetchInFlight: false,
+            refetchQueued: false,
             timeouts: [],
             keyHandler: null,
 
             /* ---------- lifecycle ---------- */
             init() {
+                this.stats = this.readStats();
                 this.startPolling();
+                this.connectWS();
                 this.updateTitle();
 
                 if (this.gameStatus === 'active') {
@@ -402,6 +465,8 @@
                 window.removeEventListener('keydown', this.keyHandler);
                 [this.pollInterval, this.opponentPoll].forEach(id => id && clearInterval(id));
                 this.timeouts.forEach(clearTimeout);
+                if (this.wsReconnectTimer) clearTimeout(this.wsReconnectTimer);
+                this.closeWS();
                 if (this.shakeDetector) this.shakeDetector.stop();
             },
 
@@ -417,6 +482,7 @@
             /* ---------- round flow ---------- */
             beginRound() {
                 this.choiceLocked = false;
+                this.awaitingOpponent = false;
                 this.shakeCount = 0;
                 this.shakeError = false;
                 this.yourChoice = null;
@@ -484,11 +550,20 @@
                 this.shakeDetector = new ShakeDetector(
                     (count) => {
                         this.shakeCount = count;
-                        Effects.play('tick');
-                        Effects.buzz(30);
+
+                        // Escalating feedback: the middle shake is louder and
+                        // buzzier than the first; the final one keeps its
+                        // existing tick + lock-in punch.
+                        if (count === 2 && this.requiredShakes > 2) {
+                            Effects.play('charge');
+                            Effects.buzz([50, 40, 80]);
+                        } else {
+                            Effects.play('tick');
+                            Effects.buzz(30);
+                        }
                         this.recordShake(count);
 
-                        if (count >= 3) {
+                        if (count >= this.requiredShakes) {
                             this.shakeDetector.stop();
                             const choices = ['rock', 'paper', 'scissors'];
                             const fate = choices[Math.floor(Math.random() * 3)];
@@ -499,7 +574,8 @@
                     () => {
                         // Sensors unavailable — the tap buttons are always visible, so just note it
                         this.shakeError = true;
-                    }
+                    },
+                    SHAKE_CONFIG
                 );
 
                 this.shakeDetector.start().then((started) => {
@@ -554,18 +630,11 @@
             },
 
             waitForOpponent() {
+                this.awaitingOpponent = true;
                 if (this.opponentPoll) clearInterval(this.opponentPoll);
-                this.opponentPoll = setInterval(async () => {
-                    const state = await this.fetchGameState();
-                    if (!state || !state.rounds) return;
-
-                    const round = state.rounds.find(r => r.round_number === this.currentRound);
-                    if (round && round.host_choice && round.guest_choice) {
-                        clearInterval(this.opponentPoll);
-                        this.opponentPoll = null;
-                        this.showRoundResult(round, state);
-                    }
-                }, 1200);
+                // Fallback poll. When the live channel is up, a push usually
+                // beats this tick; when it isn't, this is the only path.
+                this.opponentPoll = setInterval(() => this.handleStatePush(), 1200);
             },
 
             showRoundResult(round, state) {
@@ -617,22 +686,153 @@
             },
 
             completeGame(state) {
-                if (state.game.winner === this.playerRole) this.gameWinner = 'you';
-                else if (state.game.winner === 'tie') this.gameWinner = 'tie';
-                else this.gameWinner = 'opponent';
+                // A game has exactly two outcomes: calculate_game_winner()
+                // returns 'host' or 'guest' and nothing else, so there is no
+                // tie case to handle here.
+                this.gameWinner = state.game.winner === this.playerRole ? 'you' : 'opponent';
 
                 this.gameStatus = 'completed';
                 this.updateTitle();
+                this.closeWS();
+
+                // Snapshot the per-round choices for the shareable card.
+                this.finalRounds = (state.rounds || [])
+                    .filter(r => r.host_choice && r.guest_choice)
+                    .map(r => ({
+                        you: this.playerRole === 'host' ? r.host_choice : r.guest_choice,
+                        opponent: this.playerRole === 'host' ? r.guest_choice : r.host_choice,
+                        outcome: r.winner === 'tie' ? 'tie'
+                               : (r.winner === this.playerRole ? 'win' : 'loss')
+                    }));
+
+                this.recordStats();
 
                 if (this.gameWinner === 'you') {
                     Effects.celebrate();
-                } else if (this.gameWinner === 'tie') {
-                    Effects.play('tie');
                 } else {
                     Effects.play('lose');
                 }
-                this.announce(this.gameWinner === 'you' ? 'You win the game!' :
-                              this.gameWinner === 'tie' ? 'The game is a tie.' : 'You lost the game.');
+                this.announce(this.gameWinner === 'you' ? 'You win the game!' : 'You lost the game.');
+            },
+
+            /* ---------- local stats (localStorage only, never sent anywhere) ---------- */
+            readStats() {
+                const stats = Object.assign({}, EMPTY_STATS);
+                try {
+                    const raw = localStorage.getItem(STATS_KEY);
+                    if (!raw) return stats;
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || typeof parsed !== 'object') return stats;
+                    Object.keys(EMPTY_STATS).forEach(key => {
+                        const value = Number(parsed[key]);
+                        stats[key] = (isFinite(value) && value > 0) ? Math.floor(value) : 0;
+                    });
+                } catch (e) { /* private mode / corrupt value — start fresh */ }
+                return stats;
+            },
+
+            recordStats() {
+                const stats = this.readStats();
+
+                if (this.gameWinner === 'you') {
+                    stats.wins++;
+                    stats.gamesPlayed++;
+                    stats.currentStreak++;
+                    stats.bestStreak = Math.max(stats.bestStreak, stats.currentStreak);
+                } else {
+                    stats.losses++;
+                    stats.gamesPlayed++;
+                    stats.currentStreak = 0;
+                }
+
+                try {
+                    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+                } catch (e) { /* private mode — display still works this session */ }
+
+                this.stats = stats;
+            },
+
+            /* ---------- shareable result card ---------- */
+            resultSummary() {
+                const verdict = this.gameWinner === 'you' ? 'I won' : 'I lost';
+                return verdict + ' ' + this.yourWins + '–' + this.opponentWins +
+                       ' at Rock Paper Scissors (game ' + this.gameCode + ')';
+            },
+
+            siteUrl() {
+                try {
+                    return new URL(API_URLS.home, window.location.href).href.replace(/\/$/, '');
+                } catch (e) {
+                    return window.location.origin;
+                }
+            },
+
+            async shareResult() {
+                if (this.sharing) return;
+                this.sharing = true;
+                try {
+                    const canvas = this.$refs.shareCanvas;
+                    if (!canvas || typeof window.renderShareCard !== 'function' ||
+                        typeof canvas.getContext !== 'function') {
+                        this.copyText(this.resultSummary(), 'Result copied!');
+                        return;
+                    }
+
+                    window.renderShareCard(canvas, {
+                        outcome: this.gameWinner,
+                        yourWins: this.yourWins,
+                        opponentWins: this.opponentWins,
+                        rounds: this.finalRounds,
+                        gameCode: this.gameCode,
+                        siteUrl: this.siteUrl()
+                    });
+
+                    const filename = 'rps-' + this.gameCode + '.png';
+                    const blob = await new Promise((resolve) => {
+                        if (typeof canvas.toBlob !== 'function') return resolve(null);
+                        try {
+                            canvas.toBlob(resolve, 'image/png');
+                        } catch (e) {
+                            resolve(null);
+                        }
+                    });
+
+                    // 1) Native share sheet with the image attached.
+                    if (blob && typeof File === 'function' && navigator.share && navigator.canShare) {
+                        try {
+                            const file = new File([blob], filename, { type: 'image/png' });
+                            if (navigator.canShare({ files: [file] })) {
+                                await navigator.share({
+                                    files: [file],
+                                    title: 'Rock Paper Scissors',
+                                    text: this.resultSummary()
+                                });
+                                return;
+                            }
+                        } catch (e) {
+                            // Dismissed or unsupported — fall through to download.
+                            if (e && e.name === 'AbortError') return;
+                        }
+                    }
+
+                    // 2) Download the image instead.
+                    const href = blob ? URL.createObjectURL(blob) : canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = href;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    if (blob) setTimeout(() => URL.revokeObjectURL(href), 4000);
+                    handleSuccess('Result card saved');
+                } catch (e) {
+                    // 3) Last resort: plain text on the clipboard.
+                    try {
+                        this.copyText(this.resultSummary(), 'Result copied!');
+                    } catch (inner) { /* nothing more we can do */ }
+                } finally {
+                    this.sharing = false;
+                }
             },
 
             updateScoresFromState(state) {
@@ -664,22 +864,201 @@
             },
 
             startPolling() {
-                this.pollInterval = setInterval(async () => {
+                // Unchanged 2s safety net. It runs whether or not the
+                // WebSocket connects, so the live channel can only ever make
+                // the reveal *earlier*, never break it.
+                this.pollInterval = setInterval(() => this.handleStatePush(), 2000);
+            },
+
+            /* ---------- shared state pipeline ----------
+             * Every trigger (2s poll, 1.2s opponent poll, WebSocket push)
+             * funnels through here so there is exactly one copy of the
+             * fetch -> dispatch logic.
+             */
+            async handleStatePush() {
+                // Coalesce: don't pile up fetches when a push and a poll tick
+                // land together; remember that another one was asked for.
+                if (this.fetchInFlight) {
+                    this.refetchQueued = true;
+                    return;
+                }
+                this.fetchInFlight = true;
+                try {
                     const state = await this.fetchGameState();
-                    if (!state) return;
-
-                    if (state.game.status !== this.gameStatus) {
-                        const prev = this.gameStatus;
-                        this.gameStatus = state.game.status;
-                        this.updateTitle();
-
-                        if (prev === 'waiting' && this.gameStatus === 'active') {
-                            Effects.play('join');
-                            showToast('Opponent joined — good luck!', 'success');
-                            this.beginRound();
-                        }
+                    this.applyState(state);
+                } finally {
+                    this.fetchInFlight = false;
+                    if (this.refetchQueued) {
+                        this.refetchQueued = false;
+                        this.handleStatePush();
                     }
-                }, 2000);
+                }
+            },
+
+            applyState(state) {
+                if (!state || !state.game) return;
+
+                // 1) Round reveal first. This must run before the status
+                //    check below so that a final-round push starts the reveal
+                //    choreography instead of jumping straight to the
+                //    "Game Complete" screen.
+                if (this.awaitingOpponent && state.rounds) {
+                    const round = state.rounds.find(r => r.round_number === this.currentRound);
+                    if (round && round.host_choice && round.guest_choice) {
+                        this.awaitingOpponent = false;
+                        if (this.opponentPoll) {
+                            clearInterval(this.opponentPoll);
+                            this.opponentPoll = null;
+                        }
+                        this.showRoundResult(round, state);
+                    }
+                }
+
+                // 2) Status transitions. The reveal owns the hand-off to
+                //    'completed' (completeGame sets it when the animation is
+                //    done), so don't let a push cut the animation short.
+                const revealInFlight = this.phase === 'reveal' || this.isGameOver;
+                const status = state.game.status;
+                if (status !== this.gameStatus && !(revealInFlight && status === 'completed')) {
+                    const prev = this.gameStatus;
+                    this.gameStatus = status;
+                    this.updateTitle();
+
+                    if (prev === 'waiting' && this.gameStatus === 'active') {
+                        Effects.play('join');
+                        showToast('Opponent joined — good luck!', 'success');
+                        this.beginRound();
+                    } else if (this.gameStatus === 'completed') {
+                        // Completion reached without us running a reveal. Go
+                        // through completeGame() anyway so the result screen,
+                        // the local record and the end-of-game sound all still
+                        // happen instead of landing on a blank card.
+                        this.updateScoresFromState(state);
+                        this.completeGame(state);
+                    } else if (this.gameStatus === 'cancelled') {
+                        this.closeWS();
+                    }
+                }
+            },
+
+            /* ---------- live channel (WebSocket) ---------- */
+            wsUrl() {
+                try {
+                    // WS_URL comes from the server already carrying ROOT_PATH;
+                    // take only its path and re-derive scheme + host from the
+                    // page so this works behind the reverse proxy and locally.
+                    const parsed = new URL(WS_URL, window.location.href);
+                    const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    return scheme + '//' + window.location.host + parsed.pathname + parsed.search;
+                } catch (e) {
+                    return null;
+                }
+            },
+
+            gameIsOver() {
+                return this.gameStatus === 'completed' || this.gameStatus === 'cancelled';
+            },
+
+            connectWS() {
+                if (this.gameIsOver() || typeof WebSocket === 'undefined') return;
+
+                const url = this.wsUrl();
+                if (!url) return;
+
+                let socket;
+                try {
+                    socket = new WebSocket(url);
+                } catch (e) {
+                    this.scheduleWSReconnect();
+                    return;
+                }
+                this.ws = socket;
+
+                socket.onopen = () => {
+                    this.wsConnected = true;
+                    this.wsBackoff = 1000;
+                    // Catch up on anything that changed while we were away.
+                    this.handleStatePush();
+                };
+
+                socket.onmessage = (event) => {
+                    let data;
+                    try {
+                        data = JSON.parse(event.data);
+                    } catch (e) {
+                        return;
+                    }
+                    if (!data || !data.type) return;
+
+                    if (data.type === 'state') {
+                        this.handleStatePush();
+                    } else if (data.type === 'reaction') {
+                        this.onReaction(data);
+                    }
+                    // 'ping' is a keepalive — nothing to do.
+                };
+
+                socket.onerror = () => {
+                    this.wsConnected = false;
+                };
+
+                socket.onclose = () => {
+                    this.wsConnected = false;
+                    if (this.ws === socket) this.ws = null;
+                    this.scheduleWSReconnect();
+                };
+            },
+
+            scheduleWSReconnect() {
+                if (this.gameIsOver() || this.wsReconnectTimer) return;
+
+                const delay = this.wsBackoff;
+                this.wsBackoff = Math.min(this.wsBackoff * 2, 10000);
+                this.wsReconnectTimer = setTimeout(() => {
+                    this.wsReconnectTimer = null;
+                    this.connectWS();
+                }, delay);
+                this.timeouts.push(this.wsReconnectTimer);
+            },
+
+            closeWS() {
+                if (this.wsReconnectTimer) {
+                    clearTimeout(this.wsReconnectTimer);
+                    this.wsReconnectTimer = null;
+                }
+                const socket = this.ws;
+                this.ws = null;
+                this.wsConnected = false;
+                if (socket) {
+                    socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+                    try { socket.close(); } catch (e) { /* already gone */ }
+                }
+            },
+
+            /* ---------- reactions (ephemeral, cosmetic) ---------- */
+            sendReaction(emoji) {
+                if (!this.reactionChoices.includes(emoji)) return;
+                Effects.play('tick');
+                // Fire and forget: a failed reaction is not worth a toast.
+                try {
+                    fetch(API_URLS.react, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ emoji: emoji })
+                    }).catch(() => {});
+                } catch (e) { /* ignore */ }
+            },
+
+            onReaction(data) {
+                if (!data.emoji || data.from === this.playerRole) return;
+
+                const id = ++this.reactionSeq;
+                this.floatingReactions.push({ id: id, emoji: data.emoji });
+                this.later(() => {
+                    this.floatingReactions = this.floatingReactions.filter(r => r.id !== id);
+                }, 1600);
+
+                this.announce('Opponent reacted with ' + data.emoji);
             },
 
             /* ---------- actions ---------- */

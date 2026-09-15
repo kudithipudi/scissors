@@ -118,17 +118,30 @@ console.log('  - hasMotionSensors:', window.DeviceCapabilities.hasMotionSensors(
 console.log('  - isSecureContext:', window.DeviceCapabilities.isSecureContext());
 
 class ShakeDetector {
-    constructor(onShakeCallback, onErrorCallback) {
+    /**
+     * @param {function(number)} onShakeCallback  called with the running shake count
+     * @param {function(string[])} onErrorCallback called with a list of reasons
+     * @param {{threshold?: number, timeoutMs?: number, requiredShakes?: number}} [options]
+     *        Server-provided tuning (see SHAKE_THRESHOLD / SHAKE_TIMEOUT_MS /
+     *        REQUIRED_SHAKES in .env). Omitted or partial options fall back to
+     *        the historical hardcoded defaults, so callers that don't pass
+     *        anything (e.g. the /device-test page) behave exactly as before.
+     */
+    constructor(onShakeCallback, onErrorCallback, options) {
         this.onShake = onShakeCallback;
         this.onError = onErrorCallback;
         this.shakeCount = 0;
         this.lastShakeTime = 0;
         this.isListening = false;
 
-        // Configuration
-        this.SHAKE_THRESHOLD = 15; // m/s² - acceleration threshold
-        this.SHAKE_TIMEOUT = 1000; // 1 second timeout between shakes
-        this.REQUIRED_SHAKES = 3;
+        // Configuration (defaults are the original hardcoded values)
+        const opts = options || {};
+        const num = (value, fallback) =>
+            (typeof value === 'number' && isFinite(value) && value > 0) ? value : fallback;
+
+        this.SHAKE_THRESHOLD = num(opts.threshold, 15);      // m/s² - acceleration threshold
+        this.SHAKE_TIMEOUT = num(opts.timeoutMs, 1000);      // min ms between counted shakes
+        this.REQUIRED_SHAKES = num(opts.requiredShakes, 3);
 
         // Bind the handler
         this.handleMotion = this.handleMotion.bind(this);

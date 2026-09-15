@@ -42,6 +42,17 @@
             <div class="stat-value" x-text="totalGames"></div>
             <div class="stat-label">Total Games</div>
         </div>
+        <!-- Local only: read from localStorage, never sent to the server. -->
+        <div class="stat-card">
+            <div class="stat-value">
+                <span x-text="stats.wins"></span>W–<span x-text="stats.losses"></span>L
+            </div>
+            <div class="stat-label">
+                Your Record
+                <span class="streak-badge" x-show="stats.currentStreak >= 2" x-cloak
+                      x-text="'🔥 ' + stats.currentStreak"></span>
+            </div>
+        </div>
     </div>
 
     <!-- Main Actions -->
@@ -143,10 +154,13 @@
             activeGames: 0,
             totalGames: 0,
             lastGameCode: null,
+            stats: { wins: 0, losses: 0, gamesPlayed: 0, currentStreak: 0, bestStreak: 0 },
 
             init() {
                 this.loadStats();
                 setInterval(() => this.loadStats(), 10000);
+
+                this.stats = this.loadLocalStats();
 
                 try {
                     this.lastGameCode = localStorage.getItem('rps-last-game');
@@ -171,6 +185,26 @@
                     i = (i + 1) % spans.length;
                     spans[i].classList.add('is-live');
                 }, 900);
+            },
+
+            // Personal win/loss record — written by the game page, kept only
+            // in this browser (there are no accounts and nothing to sync).
+            loadLocalStats() {
+                const empty = { wins: 0, losses: 0, gamesPlayed: 0, currentStreak: 0, bestStreak: 0 };
+                try {
+                    const raw = localStorage.getItem('rps-stats');
+                    if (!raw) return empty;
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || typeof parsed !== 'object') return empty;
+                    const stats = Object.assign({}, empty);
+                    Object.keys(empty).forEach(key => {
+                        const value = Number(parsed[key]);
+                        stats[key] = (isFinite(value) && value > 0) ? Math.floor(value) : 0;
+                    });
+                    return stats;
+                } catch (e) {
+                    return empty; /* private mode / corrupt value */
+                }
             },
 
             sanitizeCode() {

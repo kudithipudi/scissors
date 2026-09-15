@@ -34,16 +34,18 @@ FastAPI + SQLite (see Migration notes below).
 │   ├── templating.py           # Jinja2Templates + ROOT_PATH-aware url_for()
 │   ├── routers/
 │   │   ├── game.py             # Page routes: index, create/view/cancel/join game
-│   │   ├── api.py              # JSON API: stats, game state, shake, choice, play-again
+│   │   ├── api.py              # JSON API: stats, game state, shake, choice, react, play-again
+│   │   ├── ws.py               # WebSocket /ws/game/{code} - "state changed" pokes
 │   │   └── admin.py            # HTTP Basic-protected admin dashboard + JSON endpoints
 │   ├── services/
 │   │   ├── game_service.py     # Core game rules (round/game winner logic)
+│   │   ├── game_events.py      # In-process pub/sub feeding the WebSocket
 │   │   └── qr_service.py       # QR code + join URL generation
 │   ├── utils/
 │   │   ├── helpers.py          # Game code gen, winner logic, formatting
 │   │   ├── rate_limit.py       # SQLite sliding-window rate limiter (game creation)
 │   │   └── scheduler.py        # APScheduler setup (expired-game cleanup)
-│   ├── static/                 # css/, js/ (shake.js, admin.js, alpine.min.js), images/
+│   ├── static/                 # css/, js/ (shake.js, effects.js, share-card.js, admin.js, alpine.min.js), images/
 │   ├── logs/                   # access.log + app.log at runtime (.gitkeep tracked)
 │   └── templates/              # base.html + page templates
 ├── data/                        # scissors.db (gitignored, www-data writable)
@@ -76,9 +78,14 @@ Visit `http://localhost:8000/`. The SQLite DB is created automatically
 venv/bin/python -m pytest
 ```
 
-91 tests cover routes, the API, game logic, rate limiting, security
-headers, device/shake detection behavior, and a full integration game
-flow against a real (throwaway) SQLite database per test.
+110 tests cover routes, the API, game logic, rate limiting, security
+headers, device/shake detection behavior, the WebSocket channel, and a
+full integration game flow against a real (throwaway) SQLite database
+per test.
+
+Most tests use httpx `ASGITransport`/`AsyncClient`, which cannot speak the
+WebSocket protocol; `tests/test_ws.py` therefore uses Starlette's
+synchronous `TestClient` instead.
 ## Deploy
 
 Runs under Gunicorn (`gunicorn.conf.py`, 1 `UvicornWorker`) bound to a unix
@@ -119,7 +126,7 @@ Set `LOG_LEVEL=debug` in `.env` to flip verbosity without code changes.
 | `RATE_LIMIT_WINDOW_SECONDS` | Rate-limit sliding window length, seconds | `3600` |
 | `SHAKE_THRESHOLD` | Accelerometer magnitude (m/s²) counted as a shake | `15` |
 | `REQUIRED_SHAKES` | Shakes needed to lock in a choice | `3` |
-| `SHAKE_TIMEOUT_MS` | Window to complete the required shakes, ms | `2000` |
+| `SHAKE_TIMEOUT_MS` | Minimum gap between two counted shakes, ms (debounce) | `1000` |
 | `QR_BOX_SIZE` | QR code box size (px per module) | `10` |
 | `QR_BORDER` | QR code border (modules) | `4` |
 | `LOG_LEVEL` | App + gunicorn log level (`debug`/`info`/...) | `info` |
@@ -133,6 +140,32 @@ Set `LOG_LEVEL=debug` in `.env` to flip verbosity without code changes.
 
 Background cleanup (APScheduler, every minute) cancels "waiting" games
 that expired before a guest joined.
+
+### Real-time updates
+
+The game page polls `/api/game/{code}/state` (every 2 s, plus every 1.2 s
+while waiting on an opponent's move) and *additionally* opens a WebSocket
+to `/ws/game/{code}`. The socket never carries game state — it only pushes
+`{"type": "state"}` when something changed, which makes the client refetch
+immediately instead of waiting for the next poll tick, so a round reveals
+with no visible lag. Polling is left running untouched as the fallback: if
+the socket never connects, drops, or a poke is dropped, everything still
+works, just with the old latency.
+
+`app/services/game_events.py` is the in-process pub/sub behind this
+(`asyncio.Queue` per subscriber, nothing persisted). This is only safe
+because gunicorn runs exactly **one** worker — see `gunicorn.conf.py`. If
+that ever becomes more than one worker, the socket would only see events
+raised by its own worker and would need a real broker.
+
+The same channel carries ephemeral emoji reactions
+(`POST /api/game/{code}/react`, fixed allowlist, in-memory ~1/2 s per
+player rate limit, never written to the database).
+
+**nginx must be configured to proxy the WebSocket upgrade** for
+`/scissors/ws/` (`proxy_http_version 1.1` plus the `Upgrade` /
+`Connection` headers). Without it the socket simply never connects and the
+app silently falls back to polling.
 
 ## Security & reliability
 
@@ -173,7 +206,19 @@ the deliberate way to play (and double as an accessibility fallback).
 - **Confetti** — canvas confetti celebrates a match win; all motion respects
   `prefers-reduced-motion`.
 - **Resilience** — a "Reconnecting…" pill appears if state polling fails
-  repeatedly; the tab title tracks game status.
+  repeatedly; the tab title tracks game status. The WebSocket reconnects on
+  its own with 1s→2s→4s→…→10s backoff, and stops once the game is over.
+- **Shake feedback** — the progress ring and the sound/haptics escalate with
+  each shake; the three `SHAKE_*` env vars above actually drive the
+  client-side detector (they used to be ignored — `shake.js` had them
+  hardcoded).
+- **Share card** — the completed-game screen can render the result to a
+  600×800 canvas (`app/static/js/share-card.js`) and hand it to
+  `navigator.share`, falling back to a download and then to copying a plain
+  text summary.
+- **Local record** — wins/losses/streak live in `localStorage` under
+  `rps-stats` and are shown on the landing page and the result screen. There
+  are still no accounts: nothing is sent to or stored on the server.
 
 ## Migration notes (Flask+Supabase -> FastAPI+SQLite)
 

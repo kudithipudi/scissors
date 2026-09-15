@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW_SECONDS: int = 3600
     SHAKE_THRESHOLD: int = 15  # m/s^2
     REQUIRED_SHAKES: int = 3
-    SHAKE_TIMEOUT_MS: int = 2000
+    SHAKE_TIMEOUT_MS: int = 1000
 
     # QR code configuration
     QR_BOX_SIZE: int = 10

@@ -63,6 +63,8 @@ window.Effects = (function () {
     const SOUNDS = {
         tick:   () => { note(660, 0, 0.09, 'square', 0.06); },
         shoot:  () => { note(880, 0, 0.12, 'square', 0.08); note(1320, 0.02, 0.14, 'square', 0.05); },
+        // Shake 2 of 3: a short rising two-note tone, between `tick` and `lock`.
+        charge: () => { note(740, 0, 0.09, 'square', 0.08); note(988, 0.07, 0.12, 'square', 0.08); },
         lock:   () => { note(523, 0, 0.1, 'sine', 0.1); note(784, 0.09, 0.16, 'sine', 0.1); },
         win:    () => { [523, 659, 784, 1047].forEach((f, i) => note(f, i * 0.11, 0.22, 'triangle', 0.12)); },
         lose:   () => { note(392, 0, 0.25, 'sawtooth', 0.07); note(311, 0.18, 0.3, 'sawtooth', 0.07); note(233, 0.36, 0.45, 'sawtooth', 0.07); },

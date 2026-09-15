@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any, Tuple
 
 from app.config import settings
 from app.models import Game, Round
+from app.services import game_events
 from app.utils.helpers import (
     generate_game_code,
     is_valid_choice,
@@ -79,6 +80,9 @@ class GameService:
         if not updated_game:
             return None, "Failed to join game."
 
+        # Poke any connected WebSocket clients (host is waiting on this).
+        game_events.publish(game_code, {"type": "state"})
+
         return updated_game, None
 
     @staticmethod
@@ -102,6 +106,7 @@ class GameService:
             return False, f"Cannot cancel {game['status']} game."
 
         await Game.cancel_game(game['id'])
+        game_events.publish(game_code, {"type": "state"})
         return True, None
 
     @staticmethod
@@ -193,6 +198,7 @@ class GameService:
             # Re-fetch game to check if it was already completed by concurrent request
             game = await Game.get_by_code(game_code)
             if game['status'] == 'completed':
+                game_events.publish(game_code, {"type": "state"})
                 return updated_round, None
 
             # Check if game is complete
@@ -211,6 +217,12 @@ class GameService:
                 if not has_pending_round:
                     next_round_number = max(r['round_number'] for r in all_rounds) + 1
                     await Round.create(game['id'], next_round_number)
+
+            # Both choices are in and every write for this round is durable:
+            # poke listeners so the reveal happens immediately instead of on
+            # the next poll tick. Published last so a client that refetches on
+            # this event always sees the settled game status.
+            game_events.publish(game_code, {"type": "state"})
 
             return updated_round, None
 

@@ -1,12 +1,43 @@
 """API routes for real-time game operations."""
+import time
+
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 
+from app.services import game_events
 from app.services.game_service import GameService
 from app.models import Game, Statistics
 from app.utils.rate_limit import is_rate_limited
 
 router = APIRouter()
+
+# Reactions are ephemeral cosmetics: never stored, only fanned out over the
+# game's WebSocket channel. Fixed allowlist so the channel can't be used to
+# push arbitrary text at the other player.
+ALLOWED_REACTIONS = {"😤", "😂", "👀", "🔥", "😱", "🤝"}
+
+# In-memory anti-spam guard, (game_code, player_role) -> last send monotonic ts.
+# Not persisted and not a security control (one worker, ephemeral games) —
+# just enough to stop a player hammering the button.
+REACTION_COOLDOWN_SECONDS = 2.0
+_last_reaction: dict = {}
+
+
+def _reaction_rate_limited(game_code: str, player_role: str) -> bool:
+    """Return True if this player reacted too recently; records the send if not."""
+    key = (game_code, player_role)
+    now = time.monotonic()
+    last = _last_reaction.get(key)
+    if last is not None and (now - last) < REACTION_COOLDOWN_SECONDS:
+        return True
+    _last_reaction[key] = now
+
+    # Opportunistic cleanup so finished games don't accumulate forever.
+    if len(_last_reaction) > 512:
+        cutoff = now - 600
+        for stale in [k for k, v in _last_reaction.items() if v < cutoff]:
+            _last_reaction.pop(stale, None)
+    return False
 
 
 async def _get_json(request: Request) -> dict:
@@ -100,6 +131,39 @@ async def submit_choice(request: Request, game_code: str):
         'success': True,
         'round': round_result,
     }
+
+
+@router.post("/game/{game_code}/react", name="api_react")
+async def react(request: Request, game_code: str):
+    """Send an ephemeral emoji reaction to the other player.
+
+    Nothing is written to the database — the reaction is fanned out over the
+    game's WebSocket channel and forgotten.
+    """
+    if 'session_id' not in request.session:
+        return JSONResponse({'error': 'Invalid session'}, status_code=401)
+
+    data = await _get_json(request)
+    emoji = data.get('emoji')
+
+    if emoji not in ALLOWED_REACTIONS:
+        return JSONResponse({'error': 'Invalid reaction'}, status_code=400)
+
+    code = game_code.upper()
+    game = await Game.get_by_code(code)
+    if not game:
+        return JSONResponse({'error': 'Game not found'}, status_code=404)
+
+    player_role = GameService.get_player_role(game, request.session['session_id'])
+    if not player_role:
+        return JSONResponse({'error': 'Not a player in this game'}, status_code=403)
+
+    if _reaction_rate_limited(code, player_role):
+        return JSONResponse({'error': 'Slow down a little'}, status_code=429)
+
+    game_events.publish(code, {'type': 'reaction', 'from': player_role, 'emoji': emoji})
+
+    return {'success': True}
 
 
 @router.post("/game/{game_code}/play-again", name="api_play_again")
