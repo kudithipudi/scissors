@@ -136,10 +136,15 @@ class GameService:
 
         rounds = await Round.get_all_by_game(game['id'])
 
+        # A tie doesn't decide a round, so it gets replayed rather than
+        # advancing the match - only count decisive (host/guest) rounds
+        # toward "which round of best_of we're on".
+        decisive_rounds = sum(1 for r in rounds if r.get('winner') in ('host', 'guest'))
+
         return {
             'game': game,
             'rounds': rounds,
-            'current_round': len(rounds)
+            'current_round': min(decisive_rounds + 1, game['best_of'])
         }
 
     @staticmethod

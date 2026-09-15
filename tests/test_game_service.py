@@ -228,6 +228,43 @@ class TestSubmitChoice:
         mock_sleep.assert_awaited_once()
 
 
+class TestGetGameState:
+    """Test game state reporting."""
+
+    @patch('app.services.game_service.Round')
+    @patch('app.services.game_service.Game')
+    async def test_current_round_counts_only_decisive_rounds(self, mock_game, mock_round):
+        """Tied rounds replay the same match round, so ties shouldn't inflate
+        current_round past best_of."""
+        mock_game.get_by_code = AsyncMock(return_value={'id': 'game-id', 'best_of': 3})
+        # Round 1 was won by host, then round 1 was replayed twice more
+        # after ties before round 2 (a fresh decisive round) began — 4 DB
+        # rows total for what a player would call "round 2".
+        mock_round.get_all_by_game = AsyncMock(return_value=[
+            {'round_number': 1, 'winner': 'host'},
+            {'round_number': 2, 'winner': 'tie'},
+            {'round_number': 3, 'winner': 'tie'},
+            {'round_number': 4, 'winner': None},
+        ])
+
+        state = await GameService.get_game_state('ABC123')
+
+        assert state['current_round'] == 2
+
+    @patch('app.services.game_service.Round')
+    @patch('app.services.game_service.Game')
+    async def test_current_round_never_exceeds_best_of(self, mock_game, mock_round):
+        """Even with a decisive round count at the cap, current_round stays <= best_of."""
+        mock_game.get_by_code = AsyncMock(return_value={'id': 'game-id', 'best_of': 1})
+        mock_round.get_all_by_game = AsyncMock(return_value=[
+            {'round_number': 1, 'winner': 'host'},
+        ])
+
+        state = await GameService.get_game_state('ABC123')
+
+        assert state['current_round'] == 1
+
+
 class TestCancelGame:
     """Test game cancellation."""
 

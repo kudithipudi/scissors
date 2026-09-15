@@ -97,7 +97,7 @@
             </div>
             <div class="score-item">
                 <div class="score-label">Best of {{ game.best_of }}</div>
-                <div class="score-value" x-text="currentRound + '/' + totalRounds"></div>
+                <div class="score-value" x-text="matchRound + '/' + totalRounds"></div>
             </div>
             <div class="score-item reaction-anchor">
                 <div class="score-label">{{ 'Computer' if vs_computer else 'Opponent' }}</div>
@@ -204,7 +204,7 @@
 
             <!-- Reveal -->
             <div x-show="phase === 'reveal'" class="card-body">
-                <h2 class="mb-1" style="font-weight: 800;">Round <span x-text="currentRound"></span></h2>
+                <h2 class="mb-1" style="font-weight: 800;">Round <span x-text="matchRound"></span></h2>
 
                 <div class="reveal-stage" :class="{ 'is-pumping': revealStage === 'pumping' }">
                     <div>
@@ -402,6 +402,11 @@
             choiceLocked: false,
 
             currentRound: 1,
+            // Ties replay the same match round instead of advancing it, so
+            // this only counts decisive rounds - unlike currentRound (which
+            // tracks the raw vs_rounds row and must match round_number for
+            // the state-lookup in applyState() below).
+            matchRound: 1,
             roundWinner: null,
             roundResultText: '',
             yourWins: 0,
@@ -680,6 +685,7 @@
                         this.later(() => {
                             if (this.gameStatus !== 'active') return;
                             this.currentRound++;
+                            if (this.roundWinner !== 'tie') this.matchRound++;
                             this.updateTitle();
                             this.beginRound();
                         }, 2400);
@@ -1148,7 +1154,7 @@
             updateTitle() {
                 const base = 'RPS ' + this.gameCode;
                 if (this.gameStatus === 'waiting') document.title = '⏳ ' + base;
-                else if (this.gameStatus === 'active') document.title = '▶ R' + this.currentRound + ' · ' + base;
+                else if (this.gameStatus === 'active') document.title = '▶ R' + this.matchRound + ' · ' + base;
                 else if (this.gameStatus === 'completed') document.title = '🏁 ' + base;
                 else document.title = base;
             },
