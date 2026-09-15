@@ -1,6 +1,6 @@
 """Integration tests for complete game flow (against a real SQLite test db)."""
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 
 class TestCompleteGameFlow:
@@ -48,6 +48,39 @@ class TestCompleteGameFlow:
         # Game state should now be completed with host as the winner
         state_response = await client.get(f'/api/game/{game_code}/state')
         assert state_response.status_code == 200
+        state = state_response.json()
+        assert state['game']['status'] == 'completed'
+        assert state['game']['winner'] == 'host'
+
+
+class TestSoloVsComputer:
+    """Test single-player game against the computer opponent."""
+
+    @patch('app.services.game_service.random_choice', return_value='scissors')
+    @patch('app.services.game_service.asyncio.sleep', new_callable=AsyncMock)
+    async def test_solo_game_auto_resolves_round(self, mock_sleep, mock_random_choice, client, set_session):
+        """Host's single choice should be enough to resolve a vs-computer round."""
+        set_session(client, session_id='host-id')
+
+        create_response = await client.post(
+            '/game/create',
+            json={'best_of': 1, 'vs_computer': True}
+        )
+        assert create_response.status_code == 200
+        game_code = create_response.json()['game_code']
+
+        state_response = await client.get(f'/api/game/{game_code}/state')
+        state = state_response.json()
+        assert state['game']['status'] == 'active'
+        assert state['game']['guest_session_id'] == 'COMPUTER'
+
+        choice_response = await client.post(
+            f'/api/game/{game_code}/choice',
+            json={'choice': 'rock'}
+        )
+        assert choice_response.status_code == 200
+
+        state_response = await client.get(f'/api/game/{game_code}/state')
         state = state_response.json()
         assert state['game']['status'] == 'completed'
         assert state['game']['winner'] == 'host'

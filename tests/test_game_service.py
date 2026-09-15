@@ -1,7 +1,7 @@
 """Test game service logic."""
 import pytest
 from unittest.mock import patch, AsyncMock
-from app.services.game_service import GameService
+from app.services.game_service import GameService, COMPUTER_PLAYER_ID
 
 
 class TestCreateGame:
@@ -54,6 +54,27 @@ class TestCreateGame:
 
         assert game is not None
         assert mock_generate.call_count == 2
+
+    @patch('app.services.game_service.Round')
+    @patch('app.services.game_service.Game')
+    async def test_create_game_vs_computer_starts_active(self, mock_game, mock_round):
+        """A vs-computer game is immediately joined by the COMPUTER sentinel and goes active."""
+        mock_game.get_by_code = AsyncMock(return_value=None)
+        mock_game.create = AsyncMock(return_value={
+            'id': 'game-id', 'game_code': 'ABC123', 'status': 'waiting', 'best_of': 3
+        })
+        mock_game.join_game = AsyncMock(return_value={
+            'id': 'game-id', 'game_code': 'ABC123', 'status': 'active',
+            'guest_session_id': COMPUTER_PLAYER_ID,
+        })
+        mock_round.create = AsyncMock(return_value={'id': 'round-id'})
+
+        game, error = await GameService.create_game(3, 'host-session-id', vs_computer=True)
+
+        assert error is None
+        assert game['status'] == 'active'
+        assert game['guest_session_id'] == COMPUTER_PLAYER_ID
+        mock_game.join_game.assert_called_once_with('game-id', COMPUTER_PLAYER_ID)
 
 
 class TestJoinGame:
@@ -176,6 +197,35 @@ class TestSubmitChoice:
 
         assert result is None
         assert error == "Invalid choice."
+
+    @patch('app.services.game_service.asyncio.sleep', new_callable=AsyncMock)
+    @patch('app.services.game_service.Game')
+    @patch('app.services.game_service.Round')
+    async def test_submit_choice_vs_computer_auto_plays_guest(self, mock_round, mock_game, mock_sleep):
+        """Host's move against a computer opponent triggers an automatic guest move."""
+        mock_game.get_by_code = AsyncMock(return_value={
+            'id': 'game-id', 'status': 'active', 'best_of': 3,
+            'guest_session_id': COMPUTER_PLAYER_ID,
+        })
+        mock_round.get_all_by_game = AsyncMock(return_value=[
+            {'id': 'round-id', 'round_number': 1}
+        ])
+        mock_round.get_by_game_and_round = AsyncMock(return_value={
+            'id': 'round-id', 'round_number': 1, 'host_choice': 'rock', 'guest_choice': 'scissors'
+        })
+        mock_round.set_choice = AsyncMock()
+        mock_round.complete_round = AsyncMock()
+
+        result, error = await GameService.submit_choice('ABC123', 'host', 'rock')
+
+        assert error is None
+        assert mock_round.set_choice.call_count == 2
+        calls = mock_round.set_choice.call_args_list
+        assert calls[0].args == ('round-id', 'host', 'rock')
+        assert calls[1].args[0] == 'round-id'
+        assert calls[1].args[1] == 'guest'
+        assert calls[1].args[2] in ('rock', 'paper', 'scissors')
+        mock_sleep.assert_awaited_once()
 
 
 class TestCancelGame:

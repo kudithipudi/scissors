@@ -1,4 +1,6 @@
 """Game service with core game logic."""
+import asyncio
+import random
 from typing import Optional, Dict, Any, Tuple
 
 from app.config import settings
@@ -8,15 +10,27 @@ from app.utils.helpers import (
     generate_game_code,
     is_valid_choice,
     determine_winner,
-    calculate_game_winner
+    calculate_game_winner,
+    random_choice,
 )
+
+# Sentinel guest_session_id for a solo game against the computer. No real
+# session ever equals this, so the computer never matches as a player role
+# for an incoming request - only the server itself plays this "guest".
+COMPUTER_PLAYER_ID = "COMPUTER"
+
+# How long the computer "thinks" before its move lands, so a solo round
+# doesn't resolve instantly.
+_COMPUTER_MOVE_DELAY_RANGE = (0.4, 0.9)
 
 
 class GameService:
     """Service class for game operations."""
 
     @staticmethod
-    async def create_game(best_of: int, host_session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    async def create_game(
+        best_of: int, host_session_id: str, vs_computer: bool = False
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Create a new game.
 
@@ -46,6 +60,10 @@ class GameService:
 
         # Create first round
         await Round.create(game['id'], 1)
+
+        if vs_computer:
+            # Skip the waiting room entirely: the computer "joins" immediately.
+            game = await Game.join_game(game['id'], COMPUTER_PLAYER_ID)
 
         return game, None
 
@@ -181,6 +199,10 @@ class GameService:
         # Set choice
         await Round.set_choice(current_round['id'], player, choice)
 
+        # Solo mode: the human just moved, so make the computer's move too.
+        if player == 'host' and game.get('guest_session_id') == COMPUTER_PLAYER_ID:
+            await GameService._play_computer_turn(current_round['id'])
+
         # Check if both players have chosen
         updated_round = await Round.get_by_game_and_round(game['id'], current_round['round_number'])
         host_choice = updated_round.get('host_choice')
@@ -227,6 +249,12 @@ class GameService:
             return updated_round, None
 
         return updated_round, None
+
+    @staticmethod
+    async def _play_computer_turn(round_id: str) -> None:
+        """Make the computer opponent's move for the given round."""
+        await asyncio.sleep(random.uniform(*_COMPUTER_MOVE_DELAY_RANGE))
+        await Round.set_choice(round_id, 'guest', random_choice())
 
     @staticmethod
     def is_player_in_game(game: Dict[str, Any], session_id: str) -> bool:

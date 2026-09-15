@@ -26,7 +26,7 @@ class TestCreateGameRoute:
     @patch('app.routers.game.GameService')
     async def test_create_game(self, mock_service, client):
         """Test creating a new game."""
-        async def fake_create_game(best_of, host_session_id):
+        async def fake_create_game(best_of, host_session_id, vs_computer=False):
             return {'id': 'game-id', 'game_code': 'ABC123'}, None
         mock_service.create_game = fake_create_game
 
@@ -42,7 +42,7 @@ class TestCreateGameRoute:
     @patch('app.routers.game.GameService')
     async def test_create_game_error(self, mock_service, client):
         """Test game creation error."""
-        async def fake_create_game(best_of, host_session_id):
+        async def fake_create_game(best_of, host_session_id, vs_computer=False):
             return None, "Invalid game mode"
         mock_service.create_game = fake_create_game
 
@@ -52,6 +52,24 @@ class TestCreateGameRoute:
         )
 
         assert response.status_code == 400
+
+    @patch('app.routers.game.GameService')
+    async def test_create_game_vs_computer(self, mock_service, client):
+        """Test the vs_computer flag is passed through to the service."""
+        received = {}
+
+        async def fake_create_game(best_of, host_session_id, vs_computer=False):
+            received['vs_computer'] = vs_computer
+            return {'id': 'game-id', 'game_code': 'ABC123'}, None
+        mock_service.create_game = fake_create_game
+
+        response = await client.post(
+            '/game/create',
+            json={'best_of': 3, 'vs_computer': True}
+        )
+
+        assert response.status_code == 200
+        assert received['vs_computer'] is True
 
 
 class TestViewGameRoute:
@@ -128,6 +146,30 @@ class TestViewGameRoute:
         response = await client.get('/game/ABC123')
 
         assert response.status_code == 200
+
+    @patch('app.routers.game.GameService')
+    @patch('app.routers.game.Game')
+    async def test_view_game_vs_computer(self, mock_game, mock_service, client, set_session):
+        """Test viewing a solo vs-computer game marks vs_computer for the template."""
+        set_session(client, session_id='host-id')
+
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'game_code': 'ABC123',
+                'status': 'active',
+                'host_session_id': 'host-id',
+                'guest_session_id': 'COMPUTER',
+                'best_of': 3,
+            }
+        mock_game.get_by_code = fake_get_by_code
+        mock_service.is_player_in_game.return_value = True
+        mock_service.get_player_role.return_value = 'host'
+
+        response = await client.get('/game/ABC123')
+
+        assert response.status_code == 200
+        assert b'const VS_COMPUTER = true' in response.content
 
 
 class TestCancelGameRoute:

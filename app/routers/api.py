@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.services import game_events
-from app.services.game_service import GameService
+from app.services.game_service import GameService, COMPUTER_PLAYER_ID
 from app.models import Game, Statistics
 from app.utils.rate_limit import is_rate_limited
 
@@ -185,7 +185,10 @@ async def play_again(request: Request, game_code: str):
     if old_game['host_session_id'] != request.session['session_id']:
         return JSONResponse({'error': 'Only host can start new game'}, status_code=403)
 
-    new_game, error = await GameService.create_game(old_game['best_of'], request.session['session_id'])
+    vs_computer = old_game.get('guest_session_id') == COMPUTER_PLAYER_ID
+    new_game, error = await GameService.create_game(
+        old_game['best_of'], request.session['session_id'], vs_computer=vs_computer
+    )
 
     if error:
         return JSONResponse({'error': error}, status_code=400)

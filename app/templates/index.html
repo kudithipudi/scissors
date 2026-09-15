@@ -56,7 +56,7 @@
     </div>
 
     <!-- Main Actions -->
-    <div class="grid grid-2" style="max-width: 800px; margin: 0 auto;">
+    <div class="grid grid-3" style="max-width: 1100px; margin: 0 auto;">
         <!-- Host Game Card -->
         <div class="card">
             <div class="card-header">
@@ -76,6 +76,30 @@
                     <button type="submit" class="btn btn-primary btn-lg btn-block" :disabled="loading">
                         <span x-show="!loading">Create Game Room →</span>
                         <span x-show="loading">Creating…</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Solo vs Computer Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 style="margin-bottom: 0;">🤖 Play Solo</h2>
+                <p class="text-muted" style="margin-bottom: 0; font-size: 0.925rem;">No friend around? Face off against the computer</p>
+            </div>
+            <div class="card-body">
+                <form @submit.prevent="playSolo">
+                    <div class="form-group">
+                        <label class="form-label" id="solo-mode-label">Match length</label>
+                        <div class="segmented" role="group" aria-labelledby="solo-mode-label">
+                            <button type="button" :aria-pressed="soloBestOf === 1" @click="soloBestOf = 1">Best of 1</button>
+                            <button type="button" :aria-pressed="soloBestOf === 3" @click="soloBestOf = 3">Best of 3</button>
+                            <button type="button" :aria-pressed="soloBestOf === 5" @click="soloBestOf = 5">Best of 5</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-secondary btn-lg btn-block" :disabled="soloLoading">
+                        <span x-show="!soloLoading">Play vs Computer →</span>
+                        <span x-show="soloLoading">Starting…</span>
                     </button>
                 </form>
             </div>
@@ -148,6 +172,8 @@
     function landingPage() {
         return {
             bestOf: 3,
+            soloBestOf: 3,
+            soloLoading: false,
             gameCode: '',
             codeError: '',
             loading: false,
@@ -247,6 +273,30 @@
                     handleError('Network error. Please try again.');
                 } finally {
                     this.loading = false;
+                }
+            },
+
+            async playSolo() {
+                this.soloLoading = true;
+                try {
+                    const response = await fetch('{{ url_for("create_game") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ best_of: parseInt(this.soloBestOf), vs_computer: true })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        try { localStorage.setItem('rps-last-game', data.game_code); } catch (e) {}
+                        window.location.href = '{{ url_for("view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', data.game_code);
+                    } else {
+                        handleError(data.error || 'Failed to start game');
+                    }
+                } catch (error) {
+                    handleError('Network error. Please try again.');
+                } finally {
+                    this.soloLoading = false;
                 }
             },
 

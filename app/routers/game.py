@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.config import settings
-from app.services.game_service import GameService
+from app.services.game_service import GameService, COMPUTER_PLAYER_ID
 from app.services.qr_service import QRService
 from app.models import Game
 from app.templating import templates
@@ -54,8 +54,9 @@ async def create_game(request: Request):
 
     data = await _get_json(request)
     best_of = data.get('best_of', 3)
+    vs_computer = bool(data.get('vs_computer', False))
 
-    game, error = await GameService.create_game(best_of, request.session['session_id'])
+    game, error = await GameService.create_game(best_of, request.session['session_id'], vs_computer=vs_computer)
 
     if error:
         return JSONResponse({'error': error}, status_code=400)
@@ -116,6 +117,7 @@ async def view_game(request: Request, game_code: str):
             "player_role": player_role,
             "qr_code": qr_code,
             "join_url": join_url,
+            "vs_computer": game.get('guest_session_id') == COMPUTER_PLAYER_ID,
             # Shake tuning lives in .env — hand it to the client so changing
             # it actually changes client-side detection.
             "shake_threshold": settings.SHAKE_THRESHOLD,

@@ -175,7 +175,7 @@ class TestPlayAgainAPI:
             }
         mock_game.get_by_code = fake_get_by_code
 
-        async def fake_create_game(best_of, host_session_id):
+        async def fake_create_game(best_of, host_session_id, vs_computer=False):
             return {'game_code': 'NEW123', 'id': 'new-game-id'}, None
         mock_service.create_game = fake_create_game
 
@@ -184,6 +184,34 @@ class TestPlayAgainAPI:
         assert response.status_code == 200
         data = response.json()
         assert data['game_code'] == 'NEW123'
+
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_play_again_preserves_vs_computer(self, mock_game, mock_service, client, set_session):
+        """Test rematching a solo vs-computer game stays vs-computer."""
+        set_session(client, session_id='host-id')
+
+        async def fake_get_by_code(code):
+            return {
+                'id': 'old-game-id',
+                'status': 'completed',
+                'best_of': 3,
+                'host_session_id': 'host-id',
+                'guest_session_id': 'COMPUTER',
+            }
+        mock_game.get_by_code = fake_get_by_code
+
+        received = {}
+
+        async def fake_create_game(best_of, host_session_id, vs_computer=False):
+            received['vs_computer'] = vs_computer
+            return {'game_code': 'NEW123', 'id': 'new-game-id'}, None
+        mock_service.create_game = fake_create_game
+
+        response = await client.post('/api/game/ABC123/play-again')
+
+        assert response.status_code == 200
+        assert received['vs_computer'] is True
 
     @patch('app.routers.api.Game')
     async def test_play_again_only_host(self, mock_game, client, set_session):

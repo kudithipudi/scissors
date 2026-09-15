@@ -17,6 +17,11 @@ def is_valid_choice(choice: str) -> bool:
     return choice in ['rock', 'paper', 'scissors']
 
 
+def random_choice() -> str:
+    """Pick a random rock/paper/scissors move (used for the computer opponent)."""
+    return random.choice(['rock', 'paper', 'scissors'])
+
+
 def determine_winner(host_choice: str, guest_choice: str) -> str:
     """Determine winner of a round."""
     if host_choice == guest_choice:

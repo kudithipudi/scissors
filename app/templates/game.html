@@ -100,7 +100,7 @@
                 <div class="score-value" x-text="currentRound + '/' + totalRounds"></div>
             </div>
             <div class="score-item reaction-anchor">
-                <div class="score-label">Opponent</div>
+                <div class="score-label">{{ 'Computer' if vs_computer else 'Opponent' }}</div>
                 <div class="score-value" :class="{ 'score-bump': bumpOpponent }" x-text="opponentWins"></div>
                 <div class="reaction-float-layer" aria-hidden="true">
                     <template x-for="r in floatingReactions" :key="r.id">
@@ -232,7 +232,7 @@
 
         <!-- Emoji reactions (live channel only; hidden during the reveal) -->
         <div class="reaction-bar"
-             x-show="wsConnected && (phase === 'countdown' || phase === 'shaking' || phase === 'waiting')"
+             x-show="!vsComputer && wsConnected && (phase === 'countdown' || phase === 'shaking' || phase === 'waiting')"
              x-cloak
              role="group" aria-label="Send a reaction to your opponent">
             <template x-for="emoji in reactionChoices" :key="emoji">
@@ -343,6 +343,7 @@
 <script>
     const GAME_CODE = '{{ game.game_code }}';
     const PLAYER_ROLE = '{{ player_role }}';
+    const VS_COMPUTER = {{ 'true' if vs_computer else 'false' }};
     const INITIAL_GAME_DATA = {{ game | tojson }};
     const BEST_OF = {{ game.best_of }};
     const WINS_NEEDED = Math.ceil({{ game.best_of }} / 2);
@@ -380,6 +381,7 @@
             gameCode: GAME_CODE,
             gameStatus: INITIAL_GAME_DATA.status,
             playerRole: PLAYER_ROLE,
+            vsComputer: VS_COMPUTER,
             totalRounds: BEST_OF,
             winsNeeded: WINS_NEEDED,
 
