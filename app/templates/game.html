@@ -32,6 +32,10 @@
 </style>
 {% endblock %}
 
+{# The footer's marketing copy is dead weight during play — drop it to keep
+   the score/shake/choice UI closer to the fold on mobile. #}
+{% block footer %}{% endblock %}
+
 {% block content %}
 <div x-data="gameState()" class="fade-in">
 
@@ -90,7 +94,7 @@
     <div x-show="gameStatus === 'active'" class="text-center">
 
         <!-- Scoreboard -->
-        <div class="score-board mb-1" style="padding: var(--spacing-lg);">
+        <div class="score-board mb-1">
             <div class="score-item">
                 <div class="score-label">You</div>
                 <div class="score-value" :class="{ 'score-bump': bumpYou }" x-text="yourWins"></div>
@@ -152,7 +156,7 @@
 
                 <!-- Shake meter (mobile) -->
                 <div x-show="!shakeError" class="progress-ring" :class="'shake-tier-' + Math.min(shakeCount, requiredShakes)">
-                    <svg width="220" height="220" aria-hidden="true">
+                    <svg width="220" height="220" viewBox="0 0 220 220" aria-hidden="true">
                         <circle class="progress-ring-circle" stroke="var(--color-bg-lighter)" stroke-width="16" fill="transparent" r="95" cx="110" cy="110"></circle>
                         <circle class="progress-ring-circle" stroke="url(#gradient)" stroke-width="16" fill="transparent" r="95" cx="110" cy="110"
                                 stroke-linecap="round"

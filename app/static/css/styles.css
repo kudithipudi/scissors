@@ -230,7 +230,7 @@ body {
 }
 
 .logo-tagline {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--color-text-muted);
     white-space: nowrap;
 }
@@ -256,6 +256,9 @@ textarea {
 }
 
 .lab-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.25rem;
     color: var(--color-text-muted);
     text-decoration: none;
     font-size: 0.875rem;
@@ -286,6 +289,9 @@ textarea {
 }
 
 .app-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.25rem;
     color: inherit;
     text-decoration: underline;
 }
@@ -743,7 +749,7 @@ p {
 .score-board {
     display: flex;
     justify-content: space-around;
-    padding: var(--spacing-xl);
+    padding: var(--spacing-lg);
     background: var(--color-bg-light);
     border-radius: var(--radius-xl);
     margin: var(--spacing-lg) 0;
@@ -826,6 +832,25 @@ p {
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-weight: 600;
+}
+
+/* ===== How to Play steps ===== */
+.step {
+    padding: var(--spacing-lg);
+}
+
+.step-icon {
+    font-size: 3.5rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.step-title {
+    font-weight: 700;
+    margin-bottom: var(--spacing-sm);
+}
+
+.step-text {
+    font-size: 0.95rem;
 }
 
 /* ===== Responsive ===== */
@@ -990,6 +1015,7 @@ table th {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     width: 2.5rem;
     height: 2.5rem;
     border-radius: var(--radius-full);
@@ -1696,5 +1722,85 @@ table th {
 
     .rejoin-pill {
         margin-top: var(--spacing-md);
+    }
+}
+
+/* ----- Below-the-fold reduction: header, stats, how-to-play, game screen -----
+   Placed last (same reasoning as the block above) so these compact variants
+   win the cascade over the base rules they share equal specificity with. */
+@media (max-width: 768px) {
+    /* The lab-hub link is a secondary escape hatch (the footer/home button
+       cover the same destination) — dropping it on narrow screens stops it
+       squeezing the sound-toggle button below its 40px tap target. */
+    .lab-link {
+        display: none;
+    }
+
+    /* Stats: 3 stacked full-width cards ate ~450px of scroll for three
+       numbers. A compact row keeps them scannable in far less height. */
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--spacing-sm);
+    }
+
+    .stat-card {
+        padding: var(--spacing-md) var(--spacing-xs);
+    }
+
+    .stat-value {
+        font-size: 1.35rem;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .stat-label {
+        font-size: 0.625rem;
+        letter-spacing: 0.03em;
+    }
+
+    /* How to Play: 3 stacked blocks with 3.5rem icons were the single
+       biggest contributor to mobile scroll length. Compact 3-up strip. */
+    .how-to-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--spacing-sm);
+    }
+
+    .how-to-grid .step {
+        padding: var(--spacing-xs);
+    }
+
+    .how-to-grid .step-icon {
+        font-size: 1.75rem;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .how-to-grid .step-title {
+        font-size: 0.75rem;
+        margin-bottom: 2px;
+    }
+
+    .how-to-grid .step-text {
+        font-size: 0.75rem;
+        line-height: 1.3;
+    }
+
+    /* Game screen: shrink the scoreboard and shake meter so the
+       tap-to-choose fallback buttons land closer to (or within) the fold. */
+    .score-board {
+        padding: var(--spacing-sm) var(--spacing-xs);
+    }
+
+    .score-value {
+        font-size: 1.85rem;
+    }
+
+    .progress-ring {
+        width: 176px;
+        height: 176px;
+        margin: var(--spacing-md) auto;
+    }
+
+    .progress-ring svg {
+        width: 100%;
+        height: 100%;
     }
 }
