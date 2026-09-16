@@ -721,6 +721,7 @@
                     }));
 
                 this.recordStats();
+                this.clearLastGame();
 
                 if (this.gameWinner === 'you') {
                     Effects.celebrate();
@@ -765,6 +766,13 @@
                 } catch (e) { /* private mode — display still works this session */ }
 
                 this.stats = stats;
+            },
+
+            // The home page's "Rejoin your last game" pill reads this key —
+            // clear it once the game is over so a finished/cancelled game
+            // doesn't keep inviting a rejoin.
+            clearLastGame() {
+                try { localStorage.removeItem('rps-last-game'); } catch (e) { /* private mode */ }
             },
 
             /* ---------- shareable result card ---------- */
@@ -952,6 +960,7 @@
                         this.completeGame(state);
                     } else if (this.gameStatus === 'cancelled') {
                         this.closeWS();
+                        this.clearLastGame();
                     }
                 }
             },
@@ -1082,6 +1091,7 @@
                 try {
                     const response = await fetch(API_URLS.cancel, { method: 'POST' });
                     if (response.ok) {
+                        this.clearLastGame();
                         window.location.href = API_URLS.home;
                     } else {
                         handleError('Failed to cancel game');
