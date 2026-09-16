@@ -8,12 +8,18 @@ code; the other joins from their phone. Both players shake to make a
 choice (or use the manual fallback buttons), and the app plays out a
 best-of-1/3/5 match with live polling for game state.
 
+## Screenshots
+
+| Home (desktop) | Home (mobile) | Gameplay (mobile) |
+|---|---|---|
+| ![Home page on desktop](docs/screenshots/home-desktop.png) | ![Home page on mobile](docs/screenshots/home-mobile.png) | ![Active gameplay on mobile](docs/screenshots/gameplay-mobile.png) |
+
 ## Stack
 
 - **Backend**: FastAPI (async), served by Gunicorn + `uvicorn.workers.UvicornWorker`
 - **Database**: SQLite (`data/scissors.db`), accessed via `aiosqlite`, WAL mode
 - **Frontend**: Jinja2 templates, Alpine.js (vendored at `app/static/js/alpine.min.js`, pinned 3.14.9), custom CSS
-- **Deviation from lab standard**: hand-rolled CSS instead of Tailwind — kept its existing visual identity per the lab's UI standard for purposefully-styled apps; migration to the standard Tailwind standalone-CLI setup is deferred
+- **Styling**: hand-rolled CSS (no Tailwind/build step) to keep its own visual identity
 - **Sessions**: Starlette `SessionMiddleware` (signed cookie, itsdangerous)
 - **Background jobs**: APScheduler (`AsyncIOScheduler`) — cleans up expired "waiting" games every minute
 - **QR codes**: `qrcode` + Pillow, generated on the fly (no external storage)
@@ -25,7 +31,7 @@ FastAPI + SQLite (see Migration notes below).
 ## Architecture
 
 ```
-/var/www/scissors/
+scissors/
 ├── app/
 │   ├── main.py               # FastAPI app, middleware, routers, error handlers
 │   ├── config.py              # pydantic-settings Settings, reads .env
@@ -50,17 +56,19 @@ FastAPI + SQLite (see Migration notes below).
 │   └── templates/              # base.html + page templates
 ├── data/                        # scissors.db (gitignored, www-data writable)
 ├── db/schema.sql                 # canonical SQLite schema (checked in)
-├── tests/                        # pytest suite (77 tests)
+├── tests/                        # pytest suite (118 tests)
 ├── gunicorn.conf.py
 ├── requirements.txt              # fully pinned
 ├── .env / .env.example
-└── .gitignore
+├── .gitignore
+└── LICENSE
 ```
 
 ## Run locally
 
 ```bash
-cd /var/www/scissors
+git clone https://github.com/kudithipudi/scissors.git
+cd scissors
 python3 -m venv venv
 venv/bin/pip install -r requirements.txt
 cp .env.example .env   # then edit SECRET_KEY / ADMIN_PASSWORD
@@ -78,7 +86,7 @@ Visit `http://localhost:8000/`. The SQLite DB is created automatically
 venv/bin/python -m pytest
 ```
 
-110 tests cover routes, the API, game logic, rate limiting, security
+118 tests cover routes, the API, game logic, rate limiting, security
 headers, device/shake detection behavior, the WebSocket channel, and a
 full integration game flow against a real (throwaway) SQLite database
 per test.
@@ -88,16 +96,58 @@ WebSocket protocol; `tests/test_ws.py` therefore uses Starlette's
 synchronous `TestClient` instead.
 ## Deploy
 
-Runs under Gunicorn (`gunicorn.conf.py`, 1 `UvicornWorker`) bound to a unix
-socket, managed by systemd (`scissors.service`), reverse-proxied by nginx
-at `https://lab.kudithipudi.org/scissors/` (nginx strips the `/scissors`
-prefix before proxying; `app/templating.py` puts it back for outgoing links).
+Runs under Gunicorn (`gunicorn.conf.py`, exactly 1 `UvicornWorker` — see
+[Real-time updates](#real-time-updates) below for why) behind a reverse
+proxy of your choice. It binds a TCP port by default
+(`127.0.0.1:8000`); set `GUNICORN_BIND=unix:/path/to/scissors.sock` in the
+process environment if you'd rather front it with a unix socket.
+
+Example systemd unit:
+
+```ini
+[Unit]
+Description=Rock Paper Scissors FastAPI Application
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/scissors
+Environment="PATH=/path/to/scissors/venv/bin"
+ExecStart=/path/to/scissors/venv/bin/gunicorn -c gunicorn.conf.py app.main:app
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ```bash
-sudo systemctl restart scissors
+sudo systemctl daemon-reload
+sudo systemctl enable --now scissors
 sudo systemctl status scissors
-curl -s -o /dev/null -w '%{http_code}' https://lab.kudithipudi.org/scissors/   # -> 200
-curl -s https://lab.kudithipudi.org/scissors/health                            # -> {"status":"ok"}
+curl -s -o /dev/null -w '%{http_code}' https://your-domain.example/   # -> 200
+curl -s https://your-domain.example/health                            # -> {"status":"ok"}
+```
+
+If you mount the app under a URL prefix (e.g. `/scissors/`), have your
+proxy strip that prefix before forwarding and set `ROOT_PATH` to match, so
+`app/templating.py` can build correctly-prefixed links back out. An nginx
+example:
+
+```nginx
+location /scissors/ws/ {
+    include proxy_params;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    rewrite ^/scissors(/.*)$ $1 break;
+    proxy_pass http://127.0.0.1:8000;   # or unix:/path/to/scissors.sock
+}
+
+location /scissors/ {
+    include proxy_params;
+    rewrite ^/scissors(/.*)$ $1 break;
+    proxy_pass http://127.0.0.1:8000;   # or unix:/path/to/scissors.sock
+}
 ```
 
 ## Logs
@@ -114,13 +164,15 @@ Set `LOG_LEVEL=debug` in `.env` to flip verbosity without code changes.
 | Var | Purpose | Default |
 |---|---|---|
 | `APP_NAME` | App display name (OpenAPI title) | `Rock Paper Scissors` |
-| `ROOT_PATH` | URL prefix this app is mounted under (used to build browser-facing links; nginx already strips it from incoming paths) | `/scissors` |
+| `ROOT_PATH` | URL prefix this app is mounted under, if any (used to build browser-facing links; your proxy must strip it from incoming paths) | `` (none) |
 | `DEBUG` | Debug flag | `false` |
 | `SECRET_KEY` | Session cookie signing key | dev placeholder — **set a real one in prod** |
 | `SESSION_COOKIE_SECURE` | Require HTTPS for the session cookie | `true` |
 | `SESSION_COOKIE_MAX_AGE` | Session cookie lifetime, seconds | `86400` (24 h) |
 | `DB_PATH` | Path to the SQLite database file | `data/scissors.db` |
 | `ADMIN_PASSWORD` | Password for `/admin/*` (HTTP Basic; any username accepted) | dev placeholder — **set a real one in prod** |
+| `SITE_LINK_URL` | Optional "powered by" link URL shown in the header/footer | unset (link hidden) |
+| `SITE_LINK_LABEL` | Label for `SITE_LINK_URL` | falls back to the URL itself |
 | `GAME_TIMEOUT_MINUTES` | Minutes before an unjoined "waiting" game expires | `2` |
 | `MAX_GAMES_PER_IP_PER_HOUR` | Game-creation rate limit per client IP (sliding window, honors `X-Forwarded-For`) | `10` |
 | `RATE_LIMIT_WINDOW_SECONDS` | Rate-limit sliding window length, seconds | `3600` |
@@ -162,10 +214,10 @@ The same channel carries ephemeral emoji reactions
 (`POST /api/game/{code}/react`, fixed allowlist, in-memory ~1/2 s per
 player rate limit, never written to the database).
 
-**nginx must be configured to proxy the WebSocket upgrade** for
-`/scissors/ws/` (`proxy_http_version 1.1` plus the `Upgrade` /
-`Connection` headers). Without it the socket simply never connects and the
-app silently falls back to polling.
+**Your reverse proxy must be configured to proxy the WebSocket upgrade**
+for the `/ws/` path (`proxy_http_version 1.1` plus the `Upgrade` /
+`Connection` headers, as in the nginx example above). Without it the
+socket simply never connects and the app silently falls back to polling.
 
 ## Security & reliability
 
@@ -183,9 +235,8 @@ app silently falls back to polling.
 
 ## Admin dashboard
 
-`https://lab.kudithipudi.org/scissors/admin/`, protected by HTTP Basic
-auth using `ADMIN_PASSWORD`. Shows live stats, a filterable game list, and
-per-game round detail.
+`/admin/`, protected by HTTP Basic auth using `ADMIN_PASSWORD`. Shows live
+stats, a filterable game list, and per-game round detail.
 
 ## Device detection & motion sensors
 
@@ -237,3 +288,7 @@ the deliberate way to play (and double as an accessibility fallback).
   was unreachable from this deploy host at migration time (stale/expired
   project — also the cause of recurring `cleanup_expired_games` errors in
   the old logs), so there was nothing to safely pull over.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

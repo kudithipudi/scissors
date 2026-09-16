@@ -1,8 +1,13 @@
 """Gunicorn configuration for the Rock Paper Scissors FastAPI app."""
 import os  # noqa: E402
 
-# Server socket
-bind = 'unix:/var/www/scissors/scissors.sock'
+# Server socket. Defaults to a TCP port so this works out of the box;
+# override with e.g. GUNICORN_BIND=unix:/path/to/scissors.sock if you're
+# fronting it with nginx/another reverse proxy over a unix socket. Gunicorn
+# reads its own config before the app loads `.env`, so set this in the
+# actual process environment (systemd `Environment=`, a shell export, etc.),
+# not just in `.env`.
+bind = os.environ.get('GUNICORN_BIND', '127.0.0.1:8000')
 backlog = 2048
 
 # Worker processes (kept at 1: APScheduler runs in-process, and a second
@@ -22,7 +27,8 @@ forwarded_allow_ips = '*'
 
 # Logging: local files under app/logs/ (access.log = per-request lines,
 # app.log = error/boot log + everything the app emits via `logging`).
-# Paths resolve relative to the systemd WorkingDirectory (/var/www/scissors).
+# Paths resolve relative to the process's working directory (the systemd
+# `WorkingDirectory=`, or wherever you launch gunicorn from).
 accesslog = 'app/logs/access.log'
 errorlog = 'app/logs/app.log'
 # The app logs via logging.basicConfig -> stderr; without this, those lines

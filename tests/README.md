@@ -239,7 +239,7 @@ jobs:
 
 ```bash
 # Set PYTHONPATH
-export PYTHONPATH=/var/www/scissors:$PYTHONPATH
+export PYTHONPATH=$(pwd):$PYTHONPATH
 pytest
 ```
 

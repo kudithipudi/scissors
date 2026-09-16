@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Admin
     ADMIN_PASSWORD: str = "admin"
 
+    # Optional "powered by" / operator link shown in the header and footer.
+    # Leave blank to omit it entirely.
+    SITE_LINK_URL: str = ""
+    SITE_LINK_LABEL: str = ""
+
     # Game configuration
     GAME_TIMEOUT_MINUTES: int = 2
     MAX_GAMES_PER_IP_PER_HOUR: int = 10

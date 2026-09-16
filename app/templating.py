@@ -8,8 +8,7 @@ un-prefixed paths. Starlette's `root_path` machinery assumes the opposite
 routing for nested mounts (e.g. the /static StaticFiles mount ends up
 looking for files under an extra "static/" segment and 404s). Instead, we
 build correctly-prefixed absolute URLs for browser-facing links ourselves,
-via `build_url()` below - the same approach already used by the `rummy` app
-in this fleet.
+via `build_url()` below.
 """
 from pathlib import Path
 
@@ -39,3 +38,6 @@ def _url_for(context, name: str, /, **path_params) -> str:
 # request.url_for with no prefix) so every `{{ url_for(...) }}` in templates
 # comes out correctly prefixed with ROOT_PATH.
 templates.env.globals["url_for"] = _url_for
+
+# Exposes settings.SITE_LINK_URL / SITE_LINK_LABEL etc. to every template.
+templates.env.globals["settings"] = settings

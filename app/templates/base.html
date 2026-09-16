@@ -33,7 +33,9 @@
                 <div class="header-right">
                     {% block header_actions %}{% endblock %}
                     <button type="button" id="sound-toggle" class="icon-btn" aria-label="Toggle sound effects" aria-pressed="true" title="Sound on/off">&#128266;</button>
-                    <a href="https://lab.kudithipudi.org" class="lab-link">&larr; lab.kudithipudi.org</a>
+                    {% if settings.SITE_LINK_URL %}
+                    <a href="{{ settings.SITE_LINK_URL }}" class="lab-link">&larr; {{ settings.SITE_LINK_LABEL or settings.SITE_LINK_URL }}</a>
+                    {% endif %}
                 </div>
             </div>
         </header>
@@ -50,7 +52,9 @@
         <footer class="app-footer">
             <div class="container">
                 <p>Rock Paper Scissors — real-time multiplayer with phone shake detection.</p>
-                <p>Part of the <a href="https://lab.kudithipudi.org/">Kudithipudi AI Lab</a></p>
+                {% if settings.SITE_LINK_URL %}
+                <p>Part of <a href="{{ settings.SITE_LINK_URL }}">{{ settings.SITE_LINK_LABEL or settings.SITE_LINK_URL }}</a></p>
+                {% endif %}
             </div>
         </footer>
         {% endblock %}
