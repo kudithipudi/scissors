@@ -1841,8 +1841,12 @@ table th {
        decorative demo/heading/subtitle were pushing "Create Game Room"
        below what's actually visible. Trim hard so the action cards start
        sooner; the header already carries the app name. */
+    .app-main {
+        padding: var(--spacing-md) 0;
+    }
+
     .hero {
-        padding: var(--spacing-md) 0 var(--spacing-sm);
+        padding: var(--spacing-sm) 0;
     }
 
     .hero.mb-3 {
