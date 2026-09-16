@@ -33,88 +33,89 @@
     </div>
 
     <!-- Main Actions -->
-    <div class="grid grid-3" style="max-width: 1100px; margin: 0 auto;">
-        <!-- Host Game Card -->
-        <div class="card">
-            <div class="card-header">
-                <h2 style="margin-bottom: 0;">🎮 Host a Game</h2>
-                <p class="text-muted" style="margin-bottom: 0; font-size: 0.925rem;">Create a room and share the code</p>
-            </div>
-            <div class="card-body">
-                <form @submit.prevent="hostGame">
-                    <div class="form-group">
-                        <label class="form-label" id="mode-label">Match length</label>
-                        <div class="segmented" role="group" aria-labelledby="mode-label">
-                            <button type="button" :aria-pressed="bestOf === 1" @click="bestOf = 1">Best of 1</button>
-                            <button type="button" :aria-pressed="bestOf === 3" @click="bestOf = 3">Best of 3</button>
-                            <button type="button" :aria-pressed="bestOf === 5" @click="bestOf = 5">Best of 5</button>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-lg btn-block" :disabled="loading">
-                        <span x-show="!loading">Create Game Room →</span>
-                        <span x-show="loading">Creating…</span>
-                    </button>
-                </form>
+    <div class="card" style="max-width: 480px; margin: 0 auto;">
+        <div class="card-header">
+            <h2 class="sr-only">Choose how to play</h2>
+            <div class="segmented mode-tabs" role="group" aria-label="Choose game mode">
+                <button type="button" :aria-pressed="mode === 'host'" @click="mode = 'host'">🎮 Host</button>
+                <button type="button" :aria-pressed="mode === 'solo'" @click="mode = 'solo'">🤖 Solo</button>
+                <button type="button" :aria-pressed="mode === 'join'" @click="mode = 'join'">🎯 Join</button>
             </div>
         </div>
-
-        <!-- Solo vs Computer Card -->
-        <div class="card">
-            <div class="card-header">
-                <h2 style="margin-bottom: 0;">🤖 Play Solo</h2>
-                <p class="text-muted" style="margin-bottom: 0; font-size: 0.925rem;">No friend around? Face off against the computer</p>
-            </div>
-            <div class="card-body">
-                <form @submit.prevent="playSolo">
-                    <div class="form-group">
-                        <label class="form-label" id="solo-mode-label">Match length</label>
-                        <div class="segmented" role="group" aria-labelledby="solo-mode-label">
-                            <button type="button" :aria-pressed="soloBestOf === 1" @click="soloBestOf = 1">Best of 1</button>
-                            <button type="button" :aria-pressed="soloBestOf === 3" @click="soloBestOf = 3">Best of 3</button>
-                            <button type="button" :aria-pressed="soloBestOf === 5" @click="soloBestOf = 5">Best of 5</button>
+        <div class="card-body">
+            <!-- Host a Game -->
+            <template x-if="mode === 'host'">
+                <div>
+                    <p class="text-muted mode-subtitle">Create a room and share the code</p>
+                    <form @submit.prevent="hostGame">
+                        <div class="form-group">
+                            <label class="form-label" id="mode-label">Match length</label>
+                            <div class="segmented" role="group" aria-labelledby="mode-label">
+                                <button type="button" :aria-pressed="bestOf === 1" @click="bestOf = 1">Best of 1</button>
+                                <button type="button" :aria-pressed="bestOf === 3" @click="bestOf = 3">Best of 3</button>
+                                <button type="button" :aria-pressed="bestOf === 5" @click="bestOf = 5">Best of 5</button>
+                            </div>
                         </div>
-                    </div>
-                    <button type="submit" class="btn btn-secondary btn-lg btn-block" :disabled="soloLoading">
-                        <span x-show="!soloLoading">Play vs Computer →</span>
-                        <span x-show="soloLoading">Starting…</span>
-                    </button>
-                </form>
-            </div>
-        </div>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block" :disabled="loading">
+                            <span x-show="!loading">Create Game Room →</span>
+                            <span x-show="loading">Creating…</span>
+                        </button>
+                    </form>
+                </div>
+            </template>
 
-        <!-- Join Game Card -->
-        <div class="card">
-            <div class="card-header">
-                <h2 style="margin-bottom: 0;">🎯 Join a Game</h2>
-                <p class="text-muted" style="margin-bottom: 0; font-size: 0.925rem;">Got a code? Drop it in — or scan the QR</p>
-            </div>
-            <div class="card-body">
-                <form @submit.prevent="joinGame" novalidate>
-                    <div class="form-group">
-                        <label class="form-label" for="game-code">Game Code</label>
-                        <input
-                            id="game-code"
-                            type="text"
-                            name="game_code"
-                            autocapitalize="characters"
-                            class="form-input join-input"
-                            x-model.trim="gameCode"
-                            @input="sanitizeCode()"
-                            placeholder="ABC123"
-                            maxlength="6"
-                            spellcheck="false"
-                            aria-describedby="code-hint"
-                            :class="{ 'code-invalid': codeError }"
-                        >
-                        <p id="code-hint" class="field-hint" :class="{ 'field-error': codeError }" aria-live="polite"
-                           x-text="codeError || '6 characters — letters and numbers'"></p>
-                    </div>
-                    <button type="submit" class="btn btn-secondary btn-lg btn-block" :class="{ 'btn-primary': gameCode.length === 6 }" :disabled="loading || gameCode.length === 0">
-                        <span x-show="!loading">Join Game</span>
-                        <span x-show="loading">Joining…</span>
-                    </button>
-                </form>
-            </div>
+            <!-- Solo vs Computer -->
+            <template x-if="mode === 'solo'">
+                <div>
+                    <p class="text-muted mode-subtitle">No friend around? Face off against the computer</p>
+                    <form @submit.prevent="playSolo">
+                        <div class="form-group">
+                            <label class="form-label" id="solo-mode-label">Match length</label>
+                            <div class="segmented" role="group" aria-labelledby="solo-mode-label">
+                                <button type="button" :aria-pressed="soloBestOf === 1" @click="soloBestOf = 1">Best of 1</button>
+                                <button type="button" :aria-pressed="soloBestOf === 3" @click="soloBestOf = 3">Best of 3</button>
+                                <button type="button" :aria-pressed="soloBestOf === 5" @click="soloBestOf = 5">Best of 5</button>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-secondary btn-lg btn-block" :disabled="soloLoading">
+                            <span x-show="!soloLoading">Play vs Computer →</span>
+                            <span x-show="soloLoading">Starting…</span>
+                        </button>
+                    </form>
+                </div>
+            </template>
+
+            <!-- Join a Game -->
+            <template x-if="mode === 'join'">
+                <div>
+                    <p class="text-muted mode-subtitle">Got a code? Drop it in — or scan the QR</p>
+                    <form @submit.prevent="joinGame" novalidate>
+                        <div class="form-group">
+                            <label class="form-label" for="game-code">Game Code</label>
+                            <input
+                                id="game-code"
+                                type="text"
+                                name="game_code"
+                                autocapitalize="characters"
+                                class="form-input join-input"
+                                x-model.trim="gameCode"
+                                @input="sanitizeCode()"
+                                placeholder="ABC123"
+                                maxlength="6"
+                                spellcheck="false"
+                                aria-describedby="code-hint"
+                                :class="{ 'code-invalid': codeError }"
+                            >
+                            <p id="code-hint" class="field-hint" :class="{ 'field-error': codeError }" aria-live="polite"
+                               x-text="codeError || '6 characters — letters and numbers'"></p>
+                        </div>
+                        <button type="submit" class="btn btn-secondary btn-lg btn-block" :class="{ 'btn-primary': gameCode.length === 6 }" :disabled="loading || gameCode.length === 0">
+                            <span x-show="!loading">Join Game</span>
+                            <span x-show="loading">Joining…</span>
+                        </button>
+                    </form>
+                </div>
+            </template>
         </div>
     </div>
 
@@ -171,6 +172,7 @@
 <script>
     function landingPage() {
         return {
+            mode: 'host',
             bestOf: 3,
             soloBestOf: 3,
             soloLoading: false,
