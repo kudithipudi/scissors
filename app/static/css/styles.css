@@ -1100,6 +1100,13 @@ table th {
     transform: scale(1.15);
 }
 
+.hero-subtitle {
+    font-size: 1.25rem;
+    max-width: 560px;
+    margin: 0 auto var(--spacing-lg);
+    line-height: 1.5;
+}
+
 /* ----- Join input ----- */
 .join-input {
     letter-spacing: 0.45em;
@@ -1802,5 +1809,42 @@ table th {
     .progress-ring svg {
         width: 100%;
         height: 100%;
+    }
+
+    /* Home hero: on a real phone the browser chrome (address bar, tab
+       strip) eats a big chunk of the viewport before any scrolling — the
+       decorative demo/heading/subtitle were pushing "Create Game Room"
+       below what's actually visible. Trim hard so the action cards start
+       sooner; the header already carries the app name. */
+    .hero {
+        padding: var(--spacing-md) 0 var(--spacing-sm);
+    }
+
+    .hero.mb-3 {
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .rps-demo {
+        display: none;
+    }
+
+    .hero h1 {
+        font-size: 1.65rem;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+        line-height: 1.4;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .card {
+        padding: var(--spacing-md);
+    }
+
+    .card-header {
+        margin-bottom: var(--spacing-sm);
+        padding-bottom: var(--spacing-sm);
     }
 }
