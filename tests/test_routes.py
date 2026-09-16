@@ -2,6 +2,8 @@
 import pytest
 from unittest.mock import patch
 
+from app.config import settings
+
 
 class TestIndexRoute:
     """Test landing page."""
@@ -11,6 +13,22 @@ class TestIndexRoute:
         response = await client.get('/')
         assert response.status_code == 200
         assert b'Rock Paper Scissors' in response.content
+
+    async def test_rejoin_link_respects_root_path(self, client):
+        """The "Rejoin your last game" link is built client-side from
+        localStorage, so it can't go through the server-rendered `<a href>`
+        the way other routes do. It must still be built from a ROOT_PATH-aware
+        url_for() template rather than a hardcoded '/game/...' path, or it
+        404s once the app is mounted under a prefix (e.g. /scissors)."""
+        settings.ROOT_PATH = '/scissors'
+        try:
+            response = await client.get('/')
+        finally:
+            settings.ROOT_PATH = ''
+
+        assert response.status_code == 200
+        assert b"'/game/' + lastGameCode" not in response.content
+        assert b'/scissors/game/PLACEHOLDER' in response.content
 
     async def test_health(self, client):
         """Health check: unauthenticated JSON, no DB dependency."""

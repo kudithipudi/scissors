@@ -40,7 +40,7 @@
 <div x-data="gameState()" class="fade-in">
 
     <!-- ================= Waiting Room ================= -->
-    <div x-show="gameStatus === 'waiting'" class="text-center">
+    <div x-show="gameStatus === 'waiting'" x-transition.opacity.duration.200ms class="text-center">
         <div class="card" style="max-width: 650px; margin: 0 auto;">
             <div class="card-header" style="border-bottom: none;">
                 <h2 style="font-weight: 800; font-size: 1.75rem;">
@@ -91,7 +91,7 @@
     </div>
 
     <!-- ================= Active Game ================= -->
-    <div x-show="gameStatus === 'active'" class="text-center">
+    <div x-show="gameStatus === 'active'" x-transition.opacity.duration.200ms class="text-center">
 
         <!-- Scoreboard -->
         <div class="score-board mb-1">
@@ -129,7 +129,7 @@
         <div class="card" style="max-width: 600px; margin: 0 auto;">
 
             <!-- Permission -->
-            <div x-show="phase === 'permission'" class="card-body">
+            <div x-show="phase === 'permission'" x-transition.opacity.duration.150ms class="card-body">
                 <div style="font-size: 4rem;" aria-hidden="true">📳</div>
                 <h2 class="mb-1" style="font-weight: 800;">Enable Shake Detection</h2>
                 <p class="text-muted mb-2">Play the real way — physically shake your phone to throw your move.</p>
@@ -143,13 +143,13 @@
             </div>
 
             <!-- Countdown -->
-            <div x-show="phase === 'countdown'" class="card-body">
+            <div x-show="phase === 'countdown'" x-transition.opacity.duration.150ms class="card-body">
                 <div class="countdown" style="font-size: 6rem;" x-text="countdownEmoji" aria-hidden="true"></div>
                 <div class="countdown-word" x-text="countdownWord" aria-live="assertive"></div>
             </div>
 
             <!-- Your move -->
-            <div x-show="phase === 'shaking'" class="card-body">
+            <div x-show="phase === 'shaking'" x-transition.opacity.duration.150ms class="card-body">
                 <h2 class="shake-title mb-1" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; font-size: 2rem;">
                     MAKE YOUR MOVE!
                 </h2>
@@ -200,14 +200,14 @@
             </div>
 
             <!-- Waiting for opponent -->
-            <div x-show="phase === 'waiting'" class="card-body">
+            <div x-show="phase === 'waiting'" x-transition.opacity.duration.150ms class="card-body">
                 <h2 class="mb-1" style="font-weight: 800;">Locked in!</h2>
                 <div class="locked-choice" aria-hidden="true" x-text="getChoiceEmoji(yourChoice)"></div>
                 <p class="text-muted" style="font-size: 1.1rem; font-weight: 600;">Waiting for your opponent<span class="waiting-dots"></span></p>
             </div>
 
             <!-- Reveal -->
-            <div x-show="phase === 'reveal'" class="card-body">
+            <div x-show="phase === 'reveal'" x-transition.opacity.duration.150ms class="card-body">
                 <h2 class="mb-1" style="font-weight: 800;">Round <span x-text="matchRound"></span></h2>
 
                 <div class="reveal-stage" :class="{ 'is-pumping': revealStage === 'pumping' }">
@@ -237,6 +237,7 @@
         <!-- Emoji reactions (live channel only; hidden during the reveal) -->
         <div class="reaction-bar"
              x-show="!vsComputer && wsConnected && (phase === 'countdown' || phase === 'shaking' || phase === 'waiting')"
+             x-transition.opacity.duration.200ms
              x-cloak
              role="group" aria-label="Send a reaction to your opponent">
             <template x-for="emoji in reactionChoices" :key="emoji">
@@ -249,7 +250,7 @@
     </div>
 
     <!-- ================= Game Complete ================= -->
-    <div x-show="gameStatus === 'completed'" class="text-center">
+    <div x-show="gameStatus === 'completed'" x-transition.opacity.duration.200ms class="text-center">
         <div class="card" style="max-width: 650px; margin: 0 auto;">
             <div class="card-body" style="margin-bottom: 0;">
                 <template x-if="gameWinner === 'you'">
@@ -308,7 +309,7 @@
     </div>
 
     <!-- ================= Cancelled ================= -->
-    <div x-show="gameStatus === 'cancelled'" class="text-center">
+    <div x-show="gameStatus === 'cancelled'" x-transition.opacity.duration.200ms class="text-center">
         <div class="card" style="max-width: 600px; margin: 0 auto;">
             <div class="card-body" style="margin-bottom: 0;">
                 <div style="font-size: 4rem;" aria-hidden="true">🚪</div>
@@ -320,11 +321,13 @@
     </div>
 
     <!-- ================= Cancel confirmation modal ================= -->
-    <div class="modal-overlay" x-show="showCancelModal" x-cloak
+    <div class="modal-overlay" x-show="showCancelModal" x-transition.opacity.duration.150ms x-cloak
          @click.self="showCancelModal = false"
          @keydown.escape.window="showCancelModal = false"
          role="dialog" aria-modal="true" aria-labelledby="cancel-title">
         <div class="modal-card"
+             x-show="showCancelModal"
+             x-transition.opacity.scale.95.duration.150ms
              x-effect="if (showCancelModal) $nextTick(() => $refs.cancelYes.focus())">
             <h3 id="cancel-title">Cancel this game?</h3>
             <p class="text-muted" style="margin-bottom: 0;">Your opponent will be sent back to the lobby.</p>
@@ -336,7 +339,7 @@
     </div>
 
     <!-- Connection status pill -->
-    <div class="conn-pill" x-show="connectionLost" x-cloak role="alert">
+    <div class="conn-pill" x-show="connectionLost" x-transition.opacity.duration.200ms x-cloak role="alert">
         <span class="conn-dot"></span> Reconnecting…
     </div>
 
