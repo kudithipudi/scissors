@@ -11,7 +11,7 @@
         <div class="rps-demo mt-2" aria-hidden="true" id="rps-demo">
             <span>✊</span><span>✋</span><span>✌️</span>
         </div>
-        <h1 class="mb-1" style="font-size: 3.5rem;">
+        <h1 class="mb-1">
             <span style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 Rock Paper Scissors
             </span>
@@ -30,29 +30,6 @@
                 ↩︎ Rejoin your last game <strong x-text="lastGameCode"></strong>
             </a>
         </template>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats-grid mb-3">
-        <div class="stat-card">
-            <div class="stat-value" x-text="activeGames"></div>
-            <div class="stat-label">Active Games</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" x-text="totalGames"></div>
-            <div class="stat-label">Total Games</div>
-        </div>
-        <!-- Local only: read from localStorage, never sent to the server. -->
-        <div class="stat-card">
-            <div class="stat-value">
-                <span x-text="stats.wins"></span>W–<span x-text="stats.losses"></span>L
-            </div>
-            <div class="stat-label">
-                Your Record
-                <span class="streak-badge" x-show="stats.currentStreak >= 2" x-cloak
-                      x-text="'🔥 ' + stats.currentStreak"></span>
-            </div>
-        </div>
     </div>
 
     <!-- Main Actions -->
@@ -137,6 +114,29 @@
                         <span x-show="loading">Joining…</span>
                     </button>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid mt-3">
+        <div class="stat-card">
+            <div class="stat-value" x-text="activeGames"></div>
+            <div class="stat-label">Active Games</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="totalGames"></div>
+            <div class="stat-label">Total Games</div>
+        </div>
+        <!-- Local only: read from localStorage, never sent to the server. -->
+        <div class="stat-card">
+            <div class="stat-value">
+                <span x-text="stats.wins"></span>W–<span x-text="stats.losses"></span>L
+            </div>
+            <div class="stat-label">
+                Your Record
+                <span class="streak-badge" x-show="stats.currentStreak >= 2" x-cloak
+                      x-text="'🔥 ' + stats.currentStreak"></span>
             </div>
         </div>
     </div>

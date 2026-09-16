@@ -834,6 +834,23 @@ p {
         font-size: 2rem;
     }
 
+    .hero {
+        padding: var(--spacing-lg) 0;
+    }
+
+    .card {
+        padding: var(--spacing-lg);
+    }
+
+    .card-header {
+        margin-bottom: var(--spacing-md);
+        padding-bottom: var(--spacing-md);
+    }
+
+    .form-group {
+        margin-bottom: var(--spacing-md);
+    }
+
     .game-code {
         font-size: 2rem;
         letter-spacing: 0.3rem;
@@ -902,6 +919,7 @@ p {
     font-weight: 900;
     line-height: 1.1;
     letter-spacing: -0.02em;
+    font-size: clamp(2rem, 9vw, 3.5rem);
 }
 
 .hero .logo-icon {
@@ -1096,6 +1114,10 @@ table th {
 }
 
 .segmented button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
     padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--radius-md);
     border: none;
@@ -1647,4 +1669,32 @@ table th {
     font-weight: 700;
     letter-spacing: 0.04em;
     vertical-align: middle;
+}
+
+/* ----- Landing hero: mobile tightening -----
+   Placed last on purpose so it wins the cascade over the unconditional
+   .hero-kicker / .rps-demo / .feature-chips / .rejoin-pill rules above,
+   which share equal selector specificity. */
+@media (max-width: 768px) {
+    .hero-kicker {
+        display: none;
+    }
+
+    .hero .rps-demo {
+        margin-top: var(--spacing-sm);
+    }
+
+    .feature-chips {
+        margin-top: var(--spacing-md);
+    }
+
+    /* The third chip always wraps to its own line on narrow screens; drop
+       it rather than spend a whole extra line on the least essential one. */
+    .feature-chips .chip:nth-child(3) {
+        display: none;
+    }
+
+    .rejoin-pill {
+        margin-top: var(--spacing-md);
+    }
 }
