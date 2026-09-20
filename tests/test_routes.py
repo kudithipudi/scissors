@@ -218,3 +218,21 @@ class TestCancelGameRoute:
         response = await client.post('/game/ABC123/cancel')
 
         assert response.status_code == 400
+
+
+class TestJoinGameRoute:
+    """Test the join API route."""
+
+    @patch('app.routers.game.GameService')
+    async def test_join_expired_game(self, mock_service, client, set_session):
+        """Test joining an expired game returns 410."""
+        set_session(client, session_id='guest-id')
+
+        async def fake_join_game(code, session_id):
+            return None, "Game expired."
+        mock_service.join_game = fake_join_game
+
+        response = await client.post('/game/ABC123/join')
+
+        assert response.status_code == 410
+        assert response.json() == {'error': 'Game expired', 'status': 'expired'}

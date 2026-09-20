@@ -1,6 +1,7 @@
 """Game service with core game logic."""
 import asyncio
 import random
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Tuple
 
 from app.config import settings
@@ -22,6 +23,18 @@ COMPUTER_PLAYER_ID = "COMPUTER"
 # How long the computer "thinks" before its move lands, so a solo round
 # doesn't resolve instantly.
 _COMPUTER_MOVE_DELAY_RANGE = (0.4, 0.9)
+
+
+def _parse_iso(timestamp: Optional[str]):
+    """Parse an ISO-8601 timestamp (as produced by app.db.now_iso) into an
+    aware UTC datetime, or None if missing/unparseable."""
+    if not timestamp:
+        return None
+    try:
+        dt = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 class GameService:
@@ -68,6 +81,12 @@ class GameService:
         return game, None
 
     @staticmethod
+    def is_expired(game: Dict[str, Any]) -> bool:
+        """Whether this game's room has passed its expires_at."""
+        expires = _parse_iso(game.get('expires_at'))
+        return expires is not None and datetime.now(timezone.utc) > expires
+
+    @staticmethod
     async def join_game(game_code: str, guest_session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Join an existing game as guest.
@@ -79,6 +98,9 @@ class GameService:
         game = await Game.get_by_code(game_code)
         if not game:
             return None, "Game not found."
+
+        if GameService.is_expired(game):
+            return None, "Game expired."
 
         # Check game status
         if game['status'] != 'waiting':
@@ -97,6 +119,8 @@ class GameService:
 
         if not updated_game:
             return None, "Failed to join game."
+
+        updated_game = await Game.renew_expiry(updated_game['id'], settings.GAME_TIMEOUT_MINUTES)
 
         # Poke any connected WebSocket clients (host is waiting on this).
         game_events.publish(game_code, {"type": "state"})
@@ -226,39 +250,47 @@ class GameService:
             # Determine round winner
             winner = determine_winner(host_choice, guest_choice)
             await Round.complete_round(updated_round['id'], winner)
-
-            # Re-fetch game to check if it was already completed by concurrent request
-            game = await Game.get_by_code(game_code)
-            if game['status'] == 'completed':
-                game_events.publish(game_code, {"type": "state"})
-                return updated_round, None
-
-            # Check if game is complete
-            all_rounds = await Round.get_all_by_game(game['id'])
-            game_winner = calculate_game_winner(all_rounds, game['best_of'])
-
-            if game_winner:
-                # Game complete
-                await Game.complete_game(game['id'], game_winner)
-            else:
-                # Only create next round if an incomplete one doesn't already exist
-                has_pending_round = any(
-                    r.get('winner') is None and not r.get('completed_at')
-                    for r in all_rounds
-                )
-                if not has_pending_round:
-                    next_round_number = max(r['round_number'] for r in all_rounds) + 1
-                    await Round.create(game['id'], next_round_number)
-
-            # Both choices are in and every write for this round is durable:
-            # poke listeners so the reveal happens immediately instead of on
-            # the next poll tick. Published last so a client that refetches on
-            # this event always sees the settled game status.
-            game_events.publish(game_code, {"type": "state"})
-
+            await GameService._advance_after_round(game_code)
             return updated_round, None
 
         return updated_round, None
+
+    @staticmethod
+    async def _advance_after_round(game_code: str) -> None:
+        """Shared tail of round resolution (normal completion or a lazy
+        forfeit — see resolve_forfeits): re-fetch the game, check whether
+        the match is won, else ensure the next round exists and renew the
+        game's expiry, then publish. Published last so a client that
+        refetches on this event always sees the settled state."""
+        # Re-fetch game to check if it was already completed by concurrent request
+        game = await Game.get_by_code(game_code)
+        if game['status'] == 'completed':
+            game_events.publish(game_code, {"type": "state"})
+            return
+
+        # Check if game is complete
+        all_rounds = await Round.get_all_by_game(game['id'])
+        game_winner = calculate_game_winner(all_rounds, game['best_of'])
+
+        if game_winner:
+            # Game complete
+            await Game.complete_game(game['id'], game_winner)
+        else:
+            # Only create next round if an incomplete one doesn't already exist
+            has_pending_round = any(
+                r.get('winner') is None and not r.get('completed_at')
+                for r in all_rounds
+            )
+            if not has_pending_round:
+                next_round_number = max(r['round_number'] for r in all_rounds) + 1
+                await Round.create(game['id'], next_round_number)
+                await Game.renew_expiry(game['id'], settings.GAME_TIMEOUT_MINUTES)
+
+        # Both choices are in and every write for this round is durable:
+        # poke listeners so the reveal happens immediately instead of on
+        # the next poll tick. Published last so a client that refetches on
+        # this event always sees the settled game status.
+        game_events.publish(game_code, {"type": "state"})
 
     @staticmethod
     async def _play_computer_turn(round_id: str) -> None:

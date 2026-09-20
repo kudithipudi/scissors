@@ -65,6 +65,9 @@ async def get_game_state(request: Request, game_code: str):
     if not state:
         return JSONResponse({'error': 'Game not found'}, status_code=404)
 
+    if GameService.is_expired(state['game']):
+        return JSONResponse({'error': 'Game expired', 'status': 'expired'}, status_code=410)
+
     # Don't reveal opponent's choice until both have chosen
     session_id = request.session.get('session_id')
     if session_id:
@@ -117,6 +120,9 @@ async def submit_choice(request: Request, game_code: str):
     game = await Game.get_by_code(game_code.upper())
     if not game:
         return JSONResponse({'error': 'Game not found'}, status_code=404)
+
+    if GameService.is_expired(game):
+        return JSONResponse({'error': 'Game expired', 'status': 'expired'}, status_code=410)
 
     player_role = GameService.get_player_role(game, request.session['session_id'])
     if not player_role:
@@ -182,6 +188,9 @@ async def play_again(request: Request, game_code: str):
     old_game = await Game.get_by_code(game_code.upper())
     if not old_game:
         return JSONResponse({'error': 'Game not found'}, status_code=404)
+
+    if GameService.is_expired(old_game):
+        return JSONResponse({'error': 'Game expired', 'status': 'expired'}, status_code=410)
 
     if old_game['host_session_id'] != request.session['session_id']:
         return JSONResponse({'error': 'Only host can start new game'}, status_code=403)

@@ -93,11 +93,16 @@ class TestJoinGame:
             'id': 'game-id',
             'status': 'active'
         })
+        mock_game.renew_expiry = AsyncMock(return_value={
+            'id': 'game-id',
+            'status': 'active'
+        })
 
         game, error = await GameService.join_game('ABC123', 'guest-id')
 
         assert error is None
         assert game['status'] == 'active'
+        mock_game.renew_expiry.assert_called_once()
 
     @patch('app.services.game_service.Game')
     async def test_join_nonexistent_game(self, mock_game):
@@ -134,6 +139,39 @@ class TestJoinGame:
 
         assert game is None
         assert error == "You are the host. Cannot join as guest."
+
+
+class TestExpiry:
+    """Test expiry helpers."""
+
+    def test_is_expired_true_when_past(self):
+        from datetime import datetime, timedelta, timezone
+        past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        assert GameService.is_expired({'expires_at': past}) is True
+
+    def test_is_expired_false_when_future(self):
+        from datetime import datetime, timedelta, timezone
+        future = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+        assert GameService.is_expired({'expires_at': future}) is False
+
+    def test_is_expired_false_when_missing(self):
+        assert GameService.is_expired({}) is False
+
+
+class TestJoinGameExpiry:
+    @patch('app.services.game_service.Game')
+    async def test_join_expired_game(self, mock_game):
+        from datetime import datetime, timedelta, timezone
+        past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        mock_game.get_by_code = AsyncMock(return_value={
+            'id': 'game-id', 'status': 'waiting', 'host_session_id': 'host-id',
+            'guest_session_id': None, 'expires_at': past,
+        })
+
+        game, error = await GameService.join_game('ABC123', 'guest-id')
+
+        assert game is None
+        assert error == "Game expired."
 
 
 class TestSubmitChoice:

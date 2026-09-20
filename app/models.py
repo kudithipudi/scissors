@@ -102,6 +102,15 @@ class Game:
         return await Game.update(game_id, updates)
 
     @staticmethod
+    async def renew_expiry(game_id: str, timeout_minutes: int) -> Optional[Dict[str, Any]]:
+        """Push expires_at forward from now. Called on genuine round
+        activity (a new round starting) so an actively-played match never
+        hits the abandonment timeout mid-game — only a truly idle room
+        does."""
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=timeout_minutes)).isoformat()
+        return await Game.update(game_id, {'expires_at': expires_at})
+
+    @staticmethod
     async def get_all_active() -> List[Dict[str, Any]]:
         """Get all active games."""
         async with get_connection() as conn:

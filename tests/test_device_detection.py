@@ -2,6 +2,8 @@
 import pytest
 from unittest.mock import patch
 
+from app.services.game_service import GameService
+
 
 class TestDeviceDetection:
     """Test device type detection."""
@@ -45,6 +47,7 @@ class TestShakeDetectionEndpoint:
             return {'id': 'game-id', 'status': 'active', 'host_session_id': 'host-id'}
         mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         async def fake_submit_choice(code, role, choice):
             return {'id': 'round-id', 'winner': None}, None

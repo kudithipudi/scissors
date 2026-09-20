@@ -149,6 +149,8 @@ async def join_game(request: Request, game_code: str):
 
     game, error = await GameService.join_game(game_code.upper(), request.session['session_id'])
 
+    if error == "Game expired.":
+        return JSONResponse({'error': 'Game expired', 'status': 'expired'}, status_code=410)
     if error:
         return JSONResponse({'error': error}, status_code=400)
 

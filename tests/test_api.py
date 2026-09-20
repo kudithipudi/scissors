@@ -2,6 +2,8 @@
 import pytest
 from unittest.mock import patch
 
+from app.services.game_service import GameService
+
 
 class TestStatsAPI:
     """Test statistics API."""
@@ -58,12 +60,32 @@ class TestGameStateAPI:
                 'current_round': 1
             }
         mock_service.get_game_state = fake_get_game_state
+        mock_service.is_expired = GameService.is_expired
 
         response = await client.get('/api/game/ABC123/state')
 
         assert response.status_code == 200
         data = response.json()
         assert data['game']['status'] == 'active'
+
+    @patch('app.routers.api.GameService')
+    async def test_get_game_state_expired(self, mock_service, client):
+        """Test getting state of an expired game returns 410."""
+        async def fake_get_game_state(code):
+            from datetime import datetime, timedelta, timezone
+            past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+            return {
+                'game': {'id': 'game-id', 'status': 'active', 'expires_at': past},
+                'rounds': [],
+                'current_round': 1,
+            }
+        mock_service.get_game_state = fake_get_game_state
+        mock_service.is_expired = GameService.is_expired
+
+        response = await client.get('/api/game/ABC123/state')
+
+        assert response.status_code == 410
+        assert response.json() == {'error': 'Game expired', 'status': 'expired'}
 
     @patch('app.routers.api.GameService')
     async def test_get_game_state_not_found(self, mock_service, client):
@@ -136,6 +158,7 @@ class TestChoiceAPI:
             }
         mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         async def fake_submit_choice(code, role, choice):
             return {'id': 'round-id', 'winner': 'host'}, None
@@ -165,6 +188,7 @@ class TestChoiceAPI:
             }
         mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         async def fake_submit_choice(code, role, choice):
             return None, "Invalid choice."
@@ -191,6 +215,7 @@ class TestChoiceAPI:
             }
         mock_game.get_by_code = fake_get_by_code
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         async def fake_submit_choice(code, role, choice):
             return None, "Choice already locked"
@@ -203,6 +228,25 @@ class TestChoiceAPI:
 
         assert response.status_code == 409
         assert response.json()['error'] == "Choice already locked"
+
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_submit_choice_expired(self, mock_game, mock_service, client, set_session):
+        """Test submitting a choice to an expired game returns 410."""
+        from datetime import datetime, timedelta, timezone
+        set_session(client, session_id='host-id')
+        past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+
+        async def fake_get_by_code(code):
+            return {'id': 'game-id', 'status': 'active', 'host_session_id': 'host-id', 'expires_at': past}
+        mock_game.get_by_code = fake_get_by_code
+        mock_service.is_expired = GameService.is_expired
+
+        response = await client.post('/api/game/ABC123/choice', json={'choice': 'rock'})
+
+        assert response.status_code == 410
+        assert response.json() == {'error': 'Game expired', 'status': 'expired'}
+        mock_service.submit_choice.assert_not_called()
 
 
 class TestPlayAgainAPI:
@@ -222,6 +266,7 @@ class TestPlayAgainAPI:
                 'host_session_id': 'host-id',
             }
         mock_game.get_by_code = fake_get_by_code
+        mock_service.is_expired = GameService.is_expired
 
         async def fake_create_game(best_of, host_session_id, vs_computer=False):
             return {'game_code': 'NEW123', 'id': 'new-game-id'}, None
@@ -248,6 +293,7 @@ class TestPlayAgainAPI:
                 'guest_session_id': 'COMPUTER',
             }
         mock_game.get_by_code = fake_get_by_code
+        mock_service.is_expired = GameService.is_expired
 
         received = {}
 
@@ -260,6 +306,27 @@ class TestPlayAgainAPI:
 
         assert response.status_code == 200
         assert received['vs_computer'] is True
+
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_play_again_expired(self, mock_game, mock_service, client, set_session):
+        """Test starting a rematch from an expired game returns 410."""
+        from datetime import datetime, timedelta, timezone
+        set_session(client, session_id='host-id')
+        past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+
+        async def fake_get_by_code(code):
+            return {
+                'id': 'old-game-id', 'status': 'completed', 'best_of': 3,
+                'host_session_id': 'host-id', 'expires_at': past,
+            }
+        mock_game.get_by_code = fake_get_by_code
+        mock_service.is_expired = GameService.is_expired
+
+        response = await client.post('/api/game/ABC123/play-again')
+
+        assert response.status_code == 410
+        mock_service.create_game.assert_not_called()
 
     @patch('app.routers.api.Game')
     async def test_play_again_only_host(self, mock_game, client, set_session):
