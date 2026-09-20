@@ -23,6 +23,27 @@ class TestStatsAPI:
         assert data['active_games'] == 5
         assert data['total_games'] == 100
 
+    async def test_active_count_excludes_expired_active_games(self, client):
+        """An 'active' game whose expires_at has passed shouldn't count as active
+        — only the 'waiting' sweeper (app/utils/scheduler.py) cleans up status,
+        so a stale active game must be excluded by the count query itself."""
+        from datetime import datetime, timedelta, timezone
+        from app.models import Game
+
+        past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        future = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+
+        stale = await Game.create('STALE1', 3, 'host-a', timeout_minutes=2)
+        await Game.update(stale['id'], {'expires_at': past, 'status': 'active', 'guest_session_id': 'guest-a'})
+
+        fresh = await Game.create('FRESH1', 3, 'host-b', timeout_minutes=2)
+        await Game.update(fresh['id'], {'expires_at': future, 'status': 'active', 'guest_session_id': 'guest-b'})
+
+        response = await client.get('/api/stats')
+
+        assert response.status_code == 200
+        assert response.json()['active_games'] == 1
+
 
 class TestGameStateAPI:
     """Test game state API."""

@@ -244,10 +244,15 @@ class Statistics:
 
     @staticmethod
     async def get_active_game_count() -> int:
-        """Get active game count."""
+        """Get active game count — excludes rows whose expires_at has already
+        passed. The periodic sweeper (app/utils/scheduler.py) only cleans up
+        'waiting' rows, so a stale 'active' game can otherwise sit in this
+        count indefinitely; filtering here is cheaper and always correct."""
         async with get_connection() as conn:
             cursor = await conn.execute(
-                "SELECT COUNT(*) AS c FROM vs_games WHERE status IN ('waiting', 'active')"
+                "SELECT COUNT(*) AS c FROM vs_games"
+                " WHERE status IN ('waiting', 'active') AND expires_at >= ?",
+                (now_iso(),),
             )
             row = await cursor.fetchone()
         return row['c'] if row else 0
