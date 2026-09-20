@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch
 
 from app.config import settings
+from app.services.game_service import GameService
 
 
 class TestIndexRoute:
@@ -112,6 +113,7 @@ class TestViewGameRoute:
         mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
         mock_qr.generate_qr_code.return_value = 'data:image/png;base64,fake'
         mock_qr.get_join_url.return_value = 'http://localhost/game/ABC123'
 
@@ -148,6 +150,7 @@ class TestViewGameRoute:
             }
         mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = False
+        mock_service.is_expired = GameService.is_expired
 
         async def fake_join_game(code, session_id):
             return {
@@ -183,11 +186,68 @@ class TestViewGameRoute:
         mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         response = await client.get('/game/ABC123')
 
         assert response.status_code == 200
         assert b'const VS_COMPUTER = true' in response.content
+
+    @patch('app.routers.game.GameService')
+    @patch('app.routers.game.Game')
+    async def test_view_game_full_room_third_session(self, mock_game, mock_service, client, set_session):
+        """A stranger opening an already-full active room gets a friendly 409, not a bare 403."""
+        set_session(client, session_id='stranger-id')
+
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id', 'game_code': 'ABC123', 'status': 'active',
+                'host_session_id': 'host-id', 'guest_session_id': 'guest-id', 'best_of': 3,
+                'expires_at': '2099-01-01T00:00:00+00:00',
+            }
+        mock_game.get_by_code = fake_get_by_code
+        mock_service.is_expired = GameService.is_expired
+        mock_service.is_player_in_game.return_value = False
+        mock_service.get_player_role.return_value = None
+
+        response = await client.get('/game/ABC123')
+
+        assert response.status_code == 409
+        assert b'already has two players' in response.content
+
+    @patch('app.routers.game.GameService')
+    @patch('app.routers.game.Game')
+    async def test_view_game_cancelled_room_any_viewer(self, mock_game, mock_service, client, set_session):
+        """A cancelled room renders the friendly cancelled screen, never a 403 — even for a stranger."""
+        set_session(client, session_id='stranger-id')
+
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id', 'game_code': 'ABC123', 'status': 'cancelled',
+                'host_session_id': 'host-id', 'guest_session_id': 'guest-id', 'best_of': 3,
+                'expires_at': '2099-01-01T00:00:00+00:00',
+            }
+        mock_game.get_by_code = fake_get_by_code
+        mock_service.is_expired = GameService.is_expired
+        mock_service.is_player_in_game.return_value = False
+        mock_service.get_player_role.return_value = None
+
+        response = await client.get('/game/ABC123')
+
+        assert response.status_code == 200
+        assert b'Game Cancelled' in response.content
+
+    @patch('app.routers.game.Game')
+    async def test_view_game_not_found_clears_rejoin(self, mock_game, client):
+        """A 404 game page carries the code so the client can clear a stale rejoin entry."""
+        async def fake_get_by_code(code):
+            return None
+        mock_game.get_by_code = fake_get_by_code
+
+        response = await client.get('/game/ZZZZZZ')
+
+        assert response.status_code == 404
+        assert b"localStorage.getItem('rps-last-game') === 'ZZZZZZ'" in response.content
 
 
 class TestCancelGameRoute:

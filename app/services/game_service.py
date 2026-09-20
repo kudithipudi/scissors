@@ -102,13 +102,15 @@ class GameService:
         if GameService.is_expired(game):
             return None, "Game expired."
 
+        # Check if game is full (checked before the generic status check so
+        # a full room gets a specific, actionable error instead of the
+        # generic "Game is active. Cannot join.")
+        if game.get('guest_session_id'):
+            return None, "Room is full."
+
         # Check game status
         if game['status'] != 'waiting':
             return None, f"Game is {game['status']}. Cannot join."
-
-        # Check if game is full
-        if game.get('guest_session_id'):
-            return None, "Game is full."
 
         # Check if user is the host
         if game['host_session_id'] == guest_session_id:

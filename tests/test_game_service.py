@@ -115,17 +115,32 @@ class TestJoinGame:
         assert error == "Game not found."
 
     @patch('app.services.game_service.Game')
-    async def test_join_active_game(self, mock_game):
-        """Test joining already active game."""
+    async def test_join_non_waiting_game_without_a_guest(self, mock_game):
+        """A non-waiting game with no guest seated (e.g. cancelled before
+        anyone joined) reports its status, distinct from a full room."""
         mock_game.get_by_code = AsyncMock(return_value={
-            'status': 'active',
-            'guest_session_id': 'other-guest'
+            'status': 'cancelled',
+            'guest_session_id': None,
         })
 
         game, error = await GameService.join_game('ABC123', 'guest-id')
 
         assert game is None
-        assert error == "Game is active. Cannot join."
+        assert error == "Game is cancelled. Cannot join."
+
+    @patch('app.services.game_service.Game')
+    async def test_join_full_game(self, mock_game):
+        """Test joining a game that already has two players."""
+        mock_game.get_by_code = AsyncMock(return_value={
+            'status': 'active',
+            'host_session_id': 'host-id',
+            'guest_session_id': 'other-guest',
+        })
+
+        game, error = await GameService.join_game('ABC123', 'guest-id')
+
+        assert game is None
+        assert error == "Room is full."
 
     @patch('app.services.game_service.Game')
     async def test_host_cannot_join_as_guest(self, mock_game):

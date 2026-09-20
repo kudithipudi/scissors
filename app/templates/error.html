@@ -12,6 +12,8 @@
             The page you're looking for doesn't exist.
             {% elif error_code == 403 %}
             You don't have permission to access this resource.
+            {% elif error_code == 409 %}
+            {% elif error_code == 410 %}
             {% else %}
             Something went wrong on our end. Please try again later.
             {% endif %}
@@ -19,4 +21,15 @@
         <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-2">Go Home</a>
     </div>
 </div>
+{% if game_code %}
+<script>
+    // Stop inviting a rejoin into a room that turned out not to exist,
+    // expired, or filled up before this page could join it.
+    try {
+        if (localStorage.getItem('rps-last-game') === '{{ game_code }}') {
+            localStorage.removeItem('rps-last-game');
+        }
+    } catch (e) { /* private mode */ }
+</script>
+{% endif %}
 {% endblock %}

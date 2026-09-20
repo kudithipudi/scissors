@@ -74,30 +74,69 @@ async def view_game(request: Request, game_code: str):
     if 'session_id' not in request.session:
         request.session['session_id'] = str(uuid.uuid4())
 
-    game = await Game.get_by_code(game_code.upper())
+    code = game_code.upper()
+    game = await Game.get_by_code(code)
 
     if not game:
         return templates.TemplateResponse(
-            request, "error.html", {"error_code": 404, "message": "Game not found"}, status_code=404
+            request, "error.html",
+            {"error_code": 404, "message": "Game not found", "game_code": code},
+            status_code=404,
+        )
+
+    if GameService.is_expired(game):
+        return templates.TemplateResponse(
+            request, "error.html",
+            {"error_code": 410, "message": "This game has expired", "game_code": code},
+            status_code=410,
         )
 
     session_id = request.session['session_id']
     is_player = GameService.is_player_in_game(game, session_id)
     player_role = GameService.get_player_role(game, session_id)
 
+    # A cancelled room is informational, not an error — anyone with the
+    # link (host, guest, or a stranger) can see it closed. game.html
+    # already has a client-side 'cancelled' UI block for this.
+    if game['status'] == 'cancelled':
+        return templates.TemplateResponse(
+            request, "game.html",
+            {
+                "game": game,
+                "player_role": player_role,
+                "qr_code": None,
+                "join_url": None,
+                "vs_computer": game.get('guest_session_id') == COMPUTER_PLAYER_ID,
+                "shake_threshold": settings.SHAKE_THRESHOLD,
+                "shake_timeout_ms": settings.SHAKE_TIMEOUT_MS,
+                "required_shakes": settings.REQUIRED_SHAKES,
+            },
+        )
+
     # If game is waiting and user is not in game, they can join
     if game['status'] == 'waiting' and not is_player:
-        if not game.get('guest_session_id'):
-            updated_game, error = await GameService.join_game(game_code.upper(), session_id)
-            if error:
-                return templates.TemplateResponse(
-                    request, "error.html", {"error_code": 400, "message": error}, status_code=400
-                )
-            game = updated_game
-            player_role = 'guest'
-            is_player = True
+        updated_game, error = await GameService.join_game(code, session_id)
+        if error == "Room is full.":
+            return templates.TemplateResponse(
+                request, "error.html",
+                {"error_code": 409, "message": "This room already has two players.", "game_code": code},
+                status_code=409,
+            )
+        if error:
+            return templates.TemplateResponse(
+                request, "error.html", {"error_code": 400, "message": error}, status_code=400
+            )
+        game = updated_game
+        player_role = 'guest'
+        is_player = True
 
     if not is_player:
+        if game.get('host_session_id') and game.get('guest_session_id'):
+            return templates.TemplateResponse(
+                request, "error.html",
+                {"error_code": 409, "message": "This room already has two players.", "game_code": code},
+                status_code=409,
+            )
         return templates.TemplateResponse(
             request, "error.html", {"error_code": 403, "message": "You are not a player in this game"}, status_code=403
         )

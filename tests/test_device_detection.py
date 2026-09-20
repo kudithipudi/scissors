@@ -81,6 +81,7 @@ class TestShakeDetectionEndpoint:
         mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         response = await client.get('/game/ABC123')
 
@@ -105,6 +106,7 @@ class TestShakeDetectionEndpoint:
         mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         response = await client.get('/game/ABC123')
 
@@ -196,6 +198,7 @@ class TestErrorHandling:
         mock_game.get_by_code = fake_get_by_code
         mock_service.is_player_in_game.return_value = True
         mock_service.get_player_role.return_value = 'host'
+        mock_service.is_expired = GameService.is_expired
 
         # Should still render the game page
         response = await client.get('/game/ABC123')
