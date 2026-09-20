@@ -201,6 +201,11 @@ class GameService:
         if current_round.get('winner') is not None or current_round.get('completed_at'):
             return current_round, None
 
+        # Guard: don't let a second submission overwrite this player's
+        # already-locked choice for this round.
+        if current_round.get(f'{player}_choice') is not None:
+            return None, "Choice already locked"
+
         # Set choice
         await Round.set_choice(current_round['id'], player, choice)
 

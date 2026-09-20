@@ -166,6 +166,24 @@ class TestSubmitChoice:
 
     @patch('app.services.game_service.Game')
     @patch('app.services.game_service.Round')
+    async def test_submit_choice_already_locked(self, mock_round, mock_game):
+        """A player who already locked a choice this round can't overwrite it."""
+        mock_game.get_by_code = AsyncMock(return_value={
+            'id': 'game-id', 'status': 'active', 'best_of': 3
+        })
+        mock_round.get_all_by_game = AsyncMock(return_value=[
+            {'id': 'round-id', 'round_number': 1, 'host_choice': 'rock', 'guest_choice': None}
+        ])
+        mock_round.set_choice = AsyncMock()
+
+        result, error = await GameService.submit_choice('ABC123', 'host', 'paper')
+
+        assert result is None
+        assert error == "Choice already locked"
+        mock_round.set_choice.assert_not_called()
+
+    @patch('app.services.game_service.Game')
+    @patch('app.services.game_service.Round')
     async def test_submit_choice_both_players_determines_winner(self, mock_round, mock_game):
         """Test when both players choose, winner is determined."""
         mock_game.get_by_code = AsyncMock(return_value={

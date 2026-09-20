@@ -125,7 +125,8 @@ async def submit_choice(request: Request, game_code: str):
     round_result, error = await GameService.submit_choice(game_code.upper(), player_role, choice)
 
     if error:
-        return JSONResponse({'error': error}, status_code=400)
+        status_code = 409 if error == "Choice already locked" else 400
+        return JSONResponse({'error': error}, status_code=status_code)
 
     return {
         'success': True,

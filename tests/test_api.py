@@ -156,6 +156,33 @@ class TestChoiceAPI:
 
         assert response.status_code == 400
 
+    @patch('app.routers.api.GameService')
+    @patch('app.routers.api.Game')
+    async def test_submit_choice_already_locked(self, mock_game, mock_service, client, set_session):
+        """Test double-submitting a choice returns 409, not 400."""
+        set_session(client, session_id='host-id')
+
+        async def fake_get_by_code(code):
+            return {
+                'id': 'game-id',
+                'status': 'active',
+                'host_session_id': 'host-id',
+            }
+        mock_game.get_by_code = fake_get_by_code
+        mock_service.get_player_role.return_value = 'host'
+
+        async def fake_submit_choice(code, role, choice):
+            return None, "Choice already locked"
+        mock_service.submit_choice = fake_submit_choice
+
+        response = await client.post(
+            '/api/game/ABC123/choice',
+            json={'choice': 'paper'}
+        )
+
+        assert response.status_code == 409
+        assert response.json()['error'] == "Choice already locked"
+
 
 class TestPlayAgainAPI:
     """Test play again API."""
