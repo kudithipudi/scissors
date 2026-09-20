@@ -31,6 +31,14 @@ class TestIndexRoute:
         assert b"'/game/' + lastGameCode" not in response.content
         assert b'/scissors/game/PLACEHOLDER' in response.content
 
+    async def test_join_flow_validates_via_state_endpoint(self, client):
+        """The Join form must check room existence via the state API before
+        navigating, instead of blindly navigating on any 6-character code."""
+        response = await client.get('/')
+        assert response.status_code == 200
+        assert b"fetch(stateUrl)" in response.content
+        assert b"Room not found" in response.content
+
     async def test_health(self, client):
         """Health check: unauthenticated JSON, no DB dependency."""
         response = await client.get('/health')

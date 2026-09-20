@@ -341,10 +341,24 @@
                 if (window.Effects) Effects.play('lock');
                 this.loading = true;
                 try {
+                    const stateUrl = '{{ url_for("api_game_state", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', code);
+                    const response = await fetch(stateUrl);
+
+                    if (response.status === 404) {
+                        this.codeError = 'Room not found — check the code and try again.';
+                        return;
+                    }
+                    if (!response.ok) {
+                        this.codeError = 'Could not check that code — try again.';
+                        return;
+                    }
+
                     try { localStorage.setItem('rps-last-game', code); } catch (e) {}
                     window.location.href = '{{ url_for("view_game", game_code="PLACEHOLDER") }}'.replace('PLACEHOLDER', code);
+                } catch (error) {
+                    this.codeError = 'Network error. Please try again.';
                 } finally {
-                    setTimeout(() => { this.loading = false; }, 2000);
+                    this.loading = false;
                 }
             }
         }
