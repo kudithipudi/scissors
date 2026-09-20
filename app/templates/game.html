@@ -658,9 +658,16 @@
                 else if (round.winner === 'tie') this.roundWinner = 'tie';
                 else this.roundWinner = 'opponent';
 
-                this.roundResultText =
-                    this.roundWinner === 'you' ? '🎉 You win the round!' :
-                    this.roundWinner === 'opponent' ? '😬 Opponent takes it' : '🤝 It\'s a draw';
+                if (round.forfeited_by) {
+                    const iForfeited = round.forfeited_by === this.playerRole;
+                    this.roundResultText = iForfeited
+                        ? '⏱️ You forfeited this round (inactivity)'
+                        : '⏱️ Opponent forfeited the round';
+                } else {
+                    this.roundResultText =
+                        this.roundWinner === 'you' ? '🎉 You win the round!' :
+                        this.roundWinner === 'opponent' ? '😬 Opponent takes it' : '🤝 It\'s a draw';
+                }
 
                 const prevYou = this.yourWins;
                 const prevOpp = this.opponentWins;
@@ -927,7 +934,7 @@
                 //    "Game Complete" screen.
                 if (this.awaitingOpponent && state.rounds) {
                     const round = state.rounds.find(r => r.round_number === this.currentRound);
-                    if (round && round.host_choice && round.guest_choice) {
+                    if (round && round.completed_at) {
                         this.awaitingOpponent = false;
                         if (this.opponentPoll) {
                             clearInterval(this.opponentPoll);

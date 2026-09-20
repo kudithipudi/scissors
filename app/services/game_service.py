@@ -24,6 +24,12 @@ COMPUTER_PLAYER_ID = "COMPUTER"
 # doesn't resolve instantly.
 _COMPUTER_MOVE_DELAY_RANGE = (0.4, 0.9)
 
+# One-sided inactivity: if only one player has moved and this many seconds
+# have passed since the round started, the idle player forfeits the round.
+# Measured from the round's created_at (round start) rather than a separate
+# "first choice" timestamp, to avoid a schema column purely for this.
+FORFEIT_DEADLINE_SECONDS = 120
+
 
 def _parse_iso(timestamp: Optional[str]):
     """Parse an ISO-8601 timestamp (as produced by app.db.now_iso) into an
@@ -161,6 +167,8 @@ class GameService:
             return None
 
         rounds = await Round.get_all_by_game(game['id'])
+        rounds = await GameService.resolve_forfeits(game_code, game, rounds)
+        game = await Game.get_by_code(game_code)  # may have changed: a forfeit can end the match
 
         # A tie doesn't decide a round, so it gets replayed rather than
         # advancing the match - only count decisive (host/guest) rounds
@@ -172,6 +180,39 @@ class GameService:
             'rounds': rounds,
             'current_round': min(decisive_rounds + 1, game['best_of'])
         }
+
+    @staticmethod
+    async def resolve_forfeits(game_code: str, game: Dict[str, Any], rounds: list) -> list:
+        """Lazily forfeit a stalled round: called on every get_game_state
+        read (i.e. every poll), so no separate sweeper is needed — see
+        FORFEIT_DEADLINE_SECONDS. If only one player has moved and the round
+        has been open past the deadline, award it to the player who moved,
+        exactly like a normal round win, and run the same advance-or-complete
+        logic a normal completion uses."""
+        if not rounds or game.get('status') != 'active':
+            return rounds
+
+        current = rounds[-1]
+        if current.get('winner') is not None or current.get('completed_at'):
+            return rounds
+
+        host_choice = current.get('host_choice')
+        guest_choice = current.get('guest_choice')
+        if bool(host_choice) == bool(guest_choice):
+            return rounds  # neither moved, or both moved (resolves normally)
+
+        started = _parse_iso(current.get('created_at'))
+        if started is None:
+            return rounds
+        age_seconds = (datetime.now(timezone.utc) - started).total_seconds()
+        if age_seconds < FORFEIT_DEADLINE_SECONDS:
+            return rounds
+
+        winner, forfeited_by = ('host', 'guest') if host_choice else ('guest', 'host')
+        await Round.forfeit(current['id'], winner, forfeited_by)
+        await GameService._advance_after_round(game_code)
+
+        return await Round.get_all_by_game(game['id'])
 
     @staticmethod
     async def record_shake(game_code: str, player: str, shake_count: int) -> Tuple[bool, Optional[str]]:

@@ -382,3 +382,72 @@ class TestCancelGame:
 
         assert success is False
         assert error == "Cannot cancel completed game."
+
+
+class TestResolveForfeits:
+    """Test lazy round-forfeit resolution (RPS-04)."""
+
+    @patch('app.services.game_service.game_events')
+    @patch('app.services.game_service.Game')
+    @patch('app.services.game_service.Round')
+    async def test_forfeits_stale_one_sided_round(self, mock_round, mock_game, mock_events):
+        """One player moved, the other never did, 120s+ have passed: the
+        round is forfeited to the player who moved."""
+        from datetime import datetime, timedelta, timezone
+        stale = (datetime.now(timezone.utc) - timedelta(seconds=200)).isoformat()
+
+        game = {'id': 'game-id', 'status': 'active', 'best_of': 3}
+        rounds = [{
+            'id': 'round-id', 'round_number': 1, 'host_choice': 'rock',
+            'guest_choice': None, 'winner': None, 'completed_at': None,
+            'created_at': stale,
+        }]
+
+        mock_round.forfeit = AsyncMock()
+        mock_round.create = AsyncMock()
+        mock_round.get_all_by_game = AsyncMock(return_value=[
+            {**rounds[0], 'winner': 'host', 'completed_at': 'now', 'forfeited_by': 'guest'}
+        ])
+        mock_game.get_by_code = AsyncMock(return_value=game)
+        mock_game.renew_expiry = AsyncMock()
+
+        result = await GameService.resolve_forfeits('ABC123', game, rounds)
+
+        mock_round.forfeit.assert_called_once_with('round-id', 'host', 'guest')
+        assert result[-1]['forfeited_by'] == 'guest'
+
+    @patch('app.services.game_service.Round')
+    async def test_no_forfeit_when_round_is_fresh(self, mock_round):
+        """Under the 120s deadline, nothing happens."""
+        from datetime import datetime, timezone
+        fresh = datetime.now(timezone.utc).isoformat()
+        game = {'id': 'game-id', 'status': 'active', 'best_of': 3}
+        rounds = [{
+            'id': 'round-id', 'round_number': 1, 'host_choice': 'rock',
+            'guest_choice': None, 'winner': None, 'completed_at': None,
+            'created_at': fresh,
+        }]
+
+        result = await GameService.resolve_forfeits('ABC123', game, rounds)
+
+        mock_round.forfeit.assert_not_called()
+        assert result == rounds
+
+    @patch('app.services.game_service.Round')
+    async def test_no_forfeit_when_neither_or_both_moved(self, mock_round):
+        from datetime import datetime, timedelta, timezone
+        stale = (datetime.now(timezone.utc) - timedelta(seconds=200)).isoformat()
+        game = {'id': 'game-id', 'status': 'active', 'best_of': 3}
+
+        neither = [{
+            'id': 'r1', 'round_number': 1, 'host_choice': None, 'guest_choice': None,
+            'winner': None, 'completed_at': None, 'created_at': stale,
+        }]
+        both = [{
+            'id': 'r1', 'round_number': 1, 'host_choice': 'rock', 'guest_choice': 'paper',
+            'winner': None, 'completed_at': None, 'created_at': stale,
+        }]
+
+        assert await GameService.resolve_forfeits('ABC123', game, neither) == neither
+        assert await GameService.resolve_forfeits('ABC123', game, both) == both
+        mock_round.forfeit.assert_not_called()

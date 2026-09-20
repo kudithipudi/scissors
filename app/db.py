@@ -24,7 +24,22 @@ async def init_db() -> None:
         await conn.execute("PRAGMA journal_mode = WAL")
         await conn.execute("PRAGMA foreign_keys = ON")
         await conn.executescript(SCHEMA_PATH.read_text())
+        await _migrate_schema(conn)
         await conn.commit()
+
+
+async def _migrate_schema(conn: aiosqlite.Connection) -> None:
+    """Idempotent ALTER TABLE additions for columns introduced after the
+    initial schema. CREATE TABLE IF NOT EXISTS above is a no-op against an
+    already-created table, so a new column needs an explicit, guarded ALTER
+    — this runs on every startup and is a no-op once the column exists."""
+    cursor = await conn.execute("PRAGMA table_info(vs_rounds)")
+    columns = {row[1] for row in await cursor.fetchall()}
+    if 'forfeited_by' not in columns:
+        await conn.execute(
+            "ALTER TABLE vs_rounds ADD COLUMN forfeited_by TEXT"
+            " CHECK (forfeited_by IN ('host', 'guest'))"
+        )
 
 
 @asynccontextmanager

@@ -10,7 +10,7 @@ _GAME_COLUMNS = {
 }
 _ROUND_COLUMNS = {
     'game_id', 'round_number', 'host_choice', 'guest_choice', 'host_shakes',
-    'guest_shakes', 'winner', 'created_at', 'completed_at',
+    'guest_shakes', 'winner', 'forfeited_by', 'created_at', 'completed_at',
 }
 
 
@@ -235,6 +235,17 @@ class Round:
         """Complete a round with winner."""
         updates = {
             'winner': winner,
+            'completed_at': now_iso(),
+        }
+        return await Round.update(round_id, updates)
+
+    @staticmethod
+    async def forfeit(round_id: str, winner: str, forfeited_by: str) -> Optional[Dict[str, Any]]:
+        """Complete a round via inactivity forfeit. `winner` is set exactly
+        like a normal round win so calculate_game_winner treats it the same."""
+        updates = {
+            'winner': winner,
+            'forfeited_by': forfeited_by,
             'completed_at': now_iso(),
         }
         return await Round.update(round_id, updates)

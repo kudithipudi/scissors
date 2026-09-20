@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS vs_rounds (
     host_shakes INTEGER NOT NULL DEFAULT 0 CHECK (host_shakes >= 0 AND host_shakes <= 3),
     guest_shakes INTEGER NOT NULL DEFAULT 0 CHECK (guest_shakes >= 0 AND guest_shakes <= 3),
     winner TEXT CHECK (winner IN ('host', 'guest', 'tie')),
+    forfeited_by TEXT CHECK (forfeited_by IN ('host', 'guest')),
     created_at TEXT NOT NULL,
     completed_at TEXT
 );
