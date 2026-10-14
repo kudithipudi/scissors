@@ -17,8 +17,10 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
 from app.config import settings
+from app.static_assets import install_asset_global
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+install_asset_global(templates, f"{settings.ROOT_PATH}/static", Path(__file__).resolve().parent / "static")
 
 
 def build_url(request: Request, name: str, **path_params) -> str:

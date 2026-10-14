@@ -10,10 +10,10 @@
     <title>{% block title %}Rock Paper Scissors{% endblock %}</title>
 
     <!-- CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}?v=3">
+    <link rel="stylesheet" href="{{ asset('css/styles.css') }}?v=3">
 
     <!-- Alpine.js (vendored, pinned 3.14.9) -->
-    <script defer src="{{ url_for('static', path='js/alpine.min.js') }}"></script>
+    <script defer src="{{ asset('js/alpine.min.js') }}"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
@@ -96,7 +96,7 @@
     </script>
 
     <!-- Sound / confetti / haptics -->
-    <script src="{{ url_for('static', path='js/effects.js') }}"></script>
+    <script src="{{ asset('js/effects.js') }}"></script>
     <script>
         (function () {
             const btn = document.getElementById('sound-toggle');

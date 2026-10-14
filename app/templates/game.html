@@ -3,8 +3,8 @@
 {% block title %}Game {{ game.game_code }}{% endblock %}
 
 {% block extra_head %}
-<script src="{{ url_for('static', path='js/shake.js') }}?v=2.2"></script>
-<script src="{{ url_for('static', path='js/share-card.js') }}?v=1.0"></script>
+<script src="{{ asset('js/shake.js') }}?v=2.2"></script>
+<script src="{{ asset('js/share-card.js') }}?v=1.0"></script>
 <style>
     .sr-only {
         position: absolute;
