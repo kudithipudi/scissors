@@ -13,7 +13,7 @@ backlog = 2048
 # Worker processes (kept at 1: APScheduler runs in-process, and a second
 # worker would double-run the cleanup job; fine for this app's traffic).
 workers = 1
-worker_class = 'uvicorn.workers.UvicornWorker'
+worker_class = 'app.access_log.AccessLogUvicornWorker'
 timeout = 120
 keepalive = 5
 
