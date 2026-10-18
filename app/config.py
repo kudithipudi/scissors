@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "Rock Paper Scissors"
     DEBUG: bool = False
     ROOT_PATH: str = ""
+    # Public URL base for Open Graph share tags (nginx strips the prefix, so root_path is empty).
+    public_base: str = "https://lab.kudithipudi.org/scissors"
 
     # Security / sessions
     SECRET_KEY: str = "dev-secret-key-change-in-production"

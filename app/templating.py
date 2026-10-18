@@ -43,3 +43,4 @@ templates.env.globals["url_for"] = _url_for
 
 # Exposes settings.SITE_LINK_URL / SITE_LINK_LABEL etc. to every template.
 templates.env.globals["settings"] = settings
+templates.env.globals["og_base"] = settings.public_base
